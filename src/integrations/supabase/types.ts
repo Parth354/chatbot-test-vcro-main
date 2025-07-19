@@ -35,8 +35,6 @@ export type Database = {
           updated_at: string
           user_id: string
           welcome_message: string | null
-          linkedin_url: string | null
-          persona: Json | null
         }
         Insert: {
           avatar_url?: string | null
@@ -58,8 +56,6 @@ export type Database = {
           updated_at?: string
           user_id: string
           welcome_message?: string | null
-          linkedin_url?: string | null
-          persona?: Json | null
         }
         Update: {
           avatar_url?: string | null
@@ -81,8 +77,6 @@ export type Database = {
           updated_at?: string
           user_id?: string
           welcome_message?: string | null
-          linkedin_url?: string | null
-          persona?: Json | null
         }
         Relationships: []
       }
@@ -126,7 +120,6 @@ export type Database = {
           cta_button_2_clicks: number | null
           id: string
           last_message_at: string | null
-          linkedin_profile: string | null
           priority: string | null
           session_cookie: string | null
           status: string | null
@@ -143,7 +136,6 @@ export type Database = {
           cta_button_2_clicks?: number | null
           id?: string
           last_message_at?: string | null
-          linkedin_profile?: string | null
           priority?: string | null
           session_cookie?: string | null
           status?: string | null
@@ -160,7 +152,6 @@ export type Database = {
           cta_button_2_clicks?: number | null
           id?: string
           last_message_at?: string | null
-          linkedin_profile?: string | null
           priority?: string | null
           session_cookie?: string | null
           status?: string | null
@@ -271,6 +262,7 @@ export type Database = {
           role: string | null
           updated_at: string
           user_id: string
+          persona_data: boolean | null
         }
         Insert: {
           avatar_url?: string | null
@@ -281,6 +273,7 @@ export type Database = {
           role?: string | null
           updated_at?: string
           user_id: string
+          persona_data?: boolean | null
         }
         Update: {
           avatar_url?: string | null
@@ -291,6 +284,7 @@ export type Database = {
           role?: string | null
           updated_at?: string
           user_id?: string
+          persona_data?: boolean | null
         }
         Relationships: []
       }

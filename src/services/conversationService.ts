@@ -1,5 +1,6 @@
 import { supabase } from "../integrations/supabase/client";
-import type { ChatSession, ChatMessage, ConversationFilters, RawChatSessionData, Profile } from "@/types/agent";
+import type { ChatSession, ChatMessage, ConversationFilters, RawChatSessionData } from "@/types/agent";
+import type { Profile } from "@/types/profile";
 
 export const ConversationService = {
   async getChatSessions(agentId: string, filters: ConversationFilters = {}, includeDeleted: boolean = false): Promise<ChatSession[]> {
@@ -40,12 +41,21 @@ export const ConversationService = {
     })) as ChatSession[];
   },
 
-  async getChatMessages(sessionId: string): Promise<ChatMessage[]> {
-    const { data, error } = await supabase
+  async getChatMessages(sessionId: string, limit?: number, offset?: number): Promise<ChatMessage[]> {
+    let query = supabase
       .from("chat_messages")
       .select("*")
       .eq("session_id", sessionId)
       .order("created_at", { ascending: true });
+
+    if (limit !== undefined) {
+      query = query.limit(limit);
+    }
+    if (offset !== undefined) {
+      query = query.range(offset, offset + (limit || 0) - 1); // range is inclusive
+    }
+
+    const { data, error } = await query;
 
     if (error) {
       console.error("Error fetching chat messages:", error);

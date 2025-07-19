@@ -146,9 +146,14 @@ CREATE POLICY "Chatbot user can view their own chat messages"
 -- ----------------------------------------------------------------------------
 ALTER TABLE public.lead_submissions ENABLE ROW LEVEL SECURITY;
 
+-- Drop old policies to ensure a clean slate
 DROP POLICY IF EXISTS "Users can view lead submissions for their agents" ON public.lead_submissions;
 DROP POLICY IF EXISTS "Lead submissions can be created for any agent" ON public.lead_submissions;
+DROP POLICY IF EXISTS "Allow anonymous users to create lead submissions" ON public.lead_submissions;
+DROP POLICY IF EXISTS "Allow authenticated users to create lead submissions" ON public.lead_submissions;
+DROP POLICY IF EXISTS "Allow users to create lead submissions for their sessions" ON public.lead_submissions;
 
+-- Allow agent owners to view leads submitted to their agents
 CREATE POLICY "Users can view lead submissions for their agents"
 ON public.lead_submissions
 FOR SELECT
@@ -158,10 +163,21 @@ USING (EXISTS (
   AND agents.user_id = auth.uid()
 ));
 
-CREATE POLICY "Lead submissions can be created for any agent"
+-- Allow users to create leads for sessions they own (or for anonymous sessions)
+CREATE POLICY "Allow users to create lead submissions for their sessions"
 ON public.lead_submissions
 FOR INSERT
-WITH CHECK (true);
+WITH CHECK (
+  EXISTS (
+    SELECT 1 FROM public.chat_sessions cs
+    WHERE cs.id = lead_submissions.session_id
+    AND (
+      cs.user_id = auth.uid() -- The session belongs to the logged-in user
+      OR
+      cs.user_id IS NULL -- The session is anonymous
+    )
+  )
+);
 
 -- ----------------------------------------------------------------------------
 -- RLS Policies for public.prompt_responses

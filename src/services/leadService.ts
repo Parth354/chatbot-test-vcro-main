@@ -2,22 +2,18 @@ import { supabase } from "@/integrations/supabase/client";
 import { LeadSubmission } from "@/types/agent";
 
 export class LeadService {
-  static async submitLead(agentId: string, sessionId: string | null, formData: Record<string, any>): Promise<LeadSubmission> {
-    const { data, error } = await supabase
+  static async submitLead(agentId: string, sessionId: string | null, formData: Record<string, any>): Promise<void> {
+    const { error } = await supabase
       .from('lead_submissions')
       .insert({
         agent_id: agentId,
         session_id: sessionId,
         form_data: formData,
-      })
-      .select('*')
-      .single();
+      });
 
     if (error) {
       throw new Error(`Failed to submit lead: ${error.message}`);
     }
-
-    return data as LeadSubmission;
   }
 
   static async getLeadSubmissions(agentId: string): Promise<LeadSubmission[]> {

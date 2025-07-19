@@ -141,14 +141,3 @@ export interface RawChatSessionData extends Omit<ChatSession, 'message_count'> {
   messages: Array<{ count: number }>;
 }
 
-export interface Profile {
-  id: string;
-  user_id: string;
-  email: string;
-  full_name?: string;
-  avatar_url?: string;
-  role?: 'user' | 'admin' | 'superadmin';
-  created_at: string;
-  updated_at: string;
-  linkedin_profile_url?: string;
-}

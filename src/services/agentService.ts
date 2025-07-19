@@ -223,11 +223,11 @@ export class AgentService {
       throw new Error(`Failed to fetch today's messages: ${todayError.message}`);
     }
 
-    let { count: leadsRequiringAttention, error: leadsError } = await supabase
+    let { count: leadsRequiringAttention, error: leadsError } = await (supabase
       .from('lead_submissions')
       .select('id', { count: 'exact' })
       .eq('agent_id', agentId)
-      .eq('status', 'unread');
+      .eq('status', 'unread') as any);
 
     if (leadsError) {
       console.warn('Could not fetch leads requiring attention:', leadsError.message);
@@ -301,7 +301,7 @@ export class AgentService {
 
     let satisfactionRate = "N/A";
     if (sessionsCount > 0) {
-      satisfactionRate = `${(((respondedSessionsCount || 0) / sessionsCount) * 100).toFixed(0)}%`;
+      satisfactionRate = `${(((responnedSessionsCount || 0) / sessionsCount) * 100).toFixed(0)}%`;
     }
 
     return {
@@ -312,5 +312,27 @@ export class AgentService {
       averageResponseTime: "N/A (requires message type/timestamps)", // Updated placeholder
       satisfactionRate: satisfactionRate
     };
+  }
+
+  static async getUserPerformanceData(userId: string): Promise<any | null> {
+    const { data, error } = await supabase
+      .from('user_performance')
+      .select('enriched_data')
+      .eq('user_id', userId)
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .single();
+
+    if (error) {
+      if (error.code === 'PGRST116') {
+        console.log("No persona data found for user:", userId); // Log if no data
+        return null; // No persona data found
+      }
+      console.error("Error fetching user performance data:", error);
+      throw new Error(`Failed to fetch user performance data: ${error.message}`);
+    }
+
+    console.log("Fetched persona data from user_performance:", data?.enriched_data); // Log the fetched data
+    return data?.enriched_data || null;
   }
 }

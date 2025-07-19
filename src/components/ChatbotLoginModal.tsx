@@ -1,12 +1,11 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Button } from "./ui/button";
 import { Input } from "./ui/input";
 import { Label } from "./ui/label";
 import { Alert, AlertDescription } from "./ui/alert";
 import { Loader2, Mail, X } from "lucide-react";
 import { supabase } from "../integrations/supabase/client";
-import { useChatAuth } from "@/hooks/useChatAuth";
-
+import { useAuth } from "@/hooks/useAuth";
 
 interface ChatbotLoginModalProps {
   isOpen: boolean;
@@ -21,7 +20,15 @@ export default function ChatbotLoginModal({ isOpen, onClose, onSuccess }: Chatbo
   const [otpSent, setOtpSent] = useState(false);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
-  const { signInWithGoogle } = useChatAuth();
+  const { user, profile, loading: authLoading, signInWithGoogle } = useAuth();
+
+  useEffect(() => {
+    console.log("Auth state in modal:", { user, profile, authLoading });
+    if (!authLoading && user) {
+      onSuccess(user);
+      onClose();
+    }
+  }, [user, profile, authLoading, onSuccess, onClose]);
 
   if (!isOpen) return null;
 

@@ -2,26 +2,16 @@ import { useState, useEffect, useRef, useCallback } from "react";
 import { PromptResponseService } from "@/services/promptResponseService";
 import { ConversationService } from "../services/conversationService";
 import { FeedbackService } from "../services/feedbackService";
-import { SessionManager } from "../utils/sessionManager";
+import { SessionManager } from "../types/sessionManager";
 import { OpenAIService } from "@/services/openAIService";
 import { INAPPROPRIATE_WORDS } from "../lib/constants";
 import { supabase } from "../integrations/supabase/client";
 import { LeadService } from "../services/leadService";
+import { AgentService } from "@/services/agentService";
+import { useAuth } from "./useAuth";
+import { Profile } from "@/types/profile"; // Import the new Profile type
 
 import { isValidUUID, normalizeLinkedInUrl } from "../lib/utils";
-
-interface Profile {
-  id: string;
-  user_id: string;
-  email: string;
-  full_name?: string;
-  avatar_url?: string;
-  role?: 'user' | 'admin' | 'superadmin';
-  created_at: string;
-  updated_at: string;
-  persona_data?: any; // JSONB type
-  linkedin_profile_url?: string;
-}
 
 interface UseChatbotLogicProps {
   chatbotData: any;
@@ -29,6 +19,7 @@ interface UseChatbotLogicProps {
 }
 
 export const useChatbotLogic = ({ chatbotData, previewMode }: UseChatbotLogicProps) => {
+  const { user: authUser, loading: authLoading } = useAuth(); // Use the auth context
   const initialPreviewMode = previewMode || "collapsed";
 
   // State from useChatbotState
@@ -60,7 +51,11 @@ export const useChatbotLogic = ({ chatbotData, previewMode }: UseChatbotLogicPro
   const [linkedinUrlInput, setLinkedinUrlInput] = useState("");
   const [linkedInPrompted, setLinkedInPrompted] = useState(false);
   const [threadId, setThreadId] = useState<string | undefined>(undefined);
+  const [userPersona, setUserPersona] = useState<any | null>(null); // New state for persona data
+  const [messagesOffset, setMessagesOffset] = useState(0);
+  const [hasMoreMessages, setHasMoreMessages] = useState(true);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
+  const prevScrollHeight = useRef(0);
 
   // Data initialization effect (from ChatbotPreview)
   useEffect(() => {
@@ -153,46 +148,55 @@ export const useChatbotLogic = ({ chatbotData, previewMode }: UseChatbotLogicPro
     }
   }, [chatHistory, isBotTyping, hasChatHistory]);
 
-  // Session initialization
+  // Session initialization and user change handling
   useEffect(() => {
     const initializeSession = async () => {
-      if (!internalChatbotData?.id) { // Only proceed if agent ID is available
-        console.log("Waiting for chatbotData.id to initialize session.");
+      if (authLoading || !internalChatbotData?.id) {
+        console.log("Waiting for auth state or chatbotData.id to initialize session.");
         return;
       }
 
       try {
-        let existingSessionCookie = SessionManager.getSessionCookie();
-          
-        if (existingSessionCookie && !SessionManager.isValidUUID(existingSessionCookie)) {
-          existingSessionCookie = SessionManager.convertLegacySessionId(existingSessionCookie);
-          SessionManager.setSessionCookie(existingSessionCookie);
-        }
-          
-        let newSessionId;
-        if (internalChatbotData?.id && isValidUUID(internalChatbotData.id)) {
-          newSessionId = await ConversationService.createOrUpdateSession(
-            internalChatbotData.id, 
-            existingSessionCookie,
-            undefined
-          );
-        } else {
-          newSessionId = SessionManager.generateSessionId();
-        }
+        const currentSessionId = SessionManager.getSessionCookie();
+        const newSessionId = await ConversationService.createOrUpdateSession(
+          internalChatbotData.id,
+          currentSessionId,
+          authUser?.id
+        );
+
         setSessionId(newSessionId);
         SessionManager.setSessionCookie(newSessionId);
-        console.log("Session initialized with agent ID:", internalChatbotData.id, "Session ID:", newSessionId);
+        console.log("Session initialized/updated with agent ID:", internalChatbotData.id, "Session ID:", newSessionId, "User ID:", authUser?.id);
       } catch (error) {
         console.error("Failed to initialize session:", error);
-        // Fallback to a temporary session if agent ID is somehow invalid or service fails
         const fallbackSessionId = SessionManager.generateSessionId();
         setSessionId(fallbackSessionId);
         SessionManager.setSessionCookie(fallbackSessionId);
         console.log("Using fallback session due to error:", fallbackSessionId);
       }
     };
+
     initializeSession();
-  }, [internalChatbotData?.id, supabase]);
+  }, [internalChatbotData?.id, authUser, authLoading]);
+
+  // Fetch user persona data when user logs in or persona_data flag changes
+  useEffect(() => {
+    const fetchAndSetPersona = async () => {
+      if (authUser && currentUser?.persona_data) {
+        try {
+          const persona = await AgentService.getUserPerformanceData(authUser.id);
+          setUserPersona(persona);
+          console.log("Fetched and set user persona:", persona); // Log the fetched persona
+        } catch (error) {
+          console.error("Error fetching user persona on auth change:", error);
+          setUserPersona(null);
+        }
+      } else {
+        setUserPersona(null); // Clear persona if user logs out or has no persona
+      }
+    };
+    fetchAndSetPersona();
+  }, [authUser, currentUser?.persona_data]);
 
   // Load suggested prompts from Q&A pairs (from ChatbotWidget)
   useEffect(() => {
@@ -356,12 +360,46 @@ export const useChatbotLogic = ({ chatbotData, previewMode }: UseChatbotLogicPro
     setSuggestions([]);
     setIsTyping(false);
     setHasChatHistory(true);
-    setIsBotTyping(true);
+    setIsBotTyping(true); // Start typing indicator immediately
 
     let botResponse;
     let isQnAMatch = false;
+    let currentPersonaData = userPersona; // Use the state variable
+
+    console.log("--- handleSendMessage Debug ---");
+    console.log("currentUser:", currentUser);
+    console.log("currentUser?.persona_data:", currentUser?.persona_data);
+    console.log("userPersona (state):", userPersona);
 
     try {
+      // --- Persona Data Fetching (Blocking if not already loaded) ---
+      if (currentUser && currentUser.persona_data && !currentPersonaData) {
+        console.log("Condition met: currentUser exists, persona_data is true, and currentPersonaData is null. Attempting to fetch persona...");
+        try {
+          currentPersonaData = await AgentService.getUserPerformanceData(currentUser.user_id);
+          setUserPersona(currentPersonaData); // Update state for future messages
+          console.log("Fetched persona data during send:", currentPersonaData);
+          if (!currentPersonaData) {
+            console.warn("Persona data flag is true, but no data found in user_performance table for user:", currentUser.user_id);
+            // Optionally, inform the user that persona couldn't be loaded
+            // botResponse = "I couldn't load your persona data, but I'll answer your question.";
+            // isQnAMatch = true; // To skip LLM if we want to send this message
+          }
+        } catch (personaError) {
+          console.error("Error fetching persona data during message send:", personaError);
+          // Optionally, inform the user
+          // botResponse = "There was an error loading your persona. I'll answer your question without it.";
+          // isQnAMatch = true;
+        }
+      } else if (currentUser && currentUser.persona_data && currentPersonaData) {
+        console.log("Condition met: currentUser exists, persona_data is true, and persona is already loaded.");
+      } else if (currentUser && !currentUser.persona_data) {
+        console.log("Condition NOT met: currentUser exists, but persona_data is FALSE.");
+      } else {
+        console.log("Condition NOT met: currentUser does not exist.");
+      }
+      // --- End Persona Data Fetching ---
+
       const lowerCaseMessage = userMessage.toLowerCase();
       const containsInappropriateWord = INAPPROPRIATE_WORDS.some(word => lowerCaseMessage.includes(word));
 
@@ -389,9 +427,24 @@ export const useChatbotLogic = ({ chatbotData, previewMode }: UseChatbotLogicPro
 
           if (leadTriggerMatch) {
             console.log("Lead collection trigger keyword detected. Showing lead form.");
-            setShowLeadForm(true);
-            botResponse = ""; // No bot response, just show the form
-            isQnAMatch = true; // Treat as a Q&A match to skip LLM
+            // Check for LinkedIn specific trigger and user status
+            const linkedinKeywords = ["linkedin", "profile", "connect"]; // Define your LinkedIn trigger keywords
+            const isLinkedInTrigger = linkedinKeywords.some(keyword => lowerCaseMessage.includes(keyword));
+
+            if (isLinkedInTrigger && currentUser) {
+              if (currentUser.linkedin_profile_url) {
+                botResponse = "We have your LinkedIn. We shall connect soon.";
+                isQnAMatch = true;
+              } else {
+                setShowLeadForm(true);
+                botResponse = ""; // No bot response, just show the form
+                isQnAMatch = true; // Treat as a Q&A match to skip LLM
+              }
+            } else {
+              setShowLeadForm(true);
+              botResponse = ""; // No bot response, just show the form
+              isQnAMatch = true; // Treat as a Q&A match to skip LLM
+            }
           } else {
             console.log("No matching Q&A response or lead trigger found.");
           }
@@ -413,7 +466,20 @@ export const useChatbotLogic = ({ chatbotData, previewMode }: UseChatbotLogicPro
           assistantId: internalChatbotData?.openai_assistant_id,
         });
 
-        const aiResponse = await openAIService.getChatCompletion(userMessage, internalChatbotData?.agentPersona, threadId);
+        let finalUserMessage = userMessage;
+
+        // If persona data is available (either pre-loaded or just fetched), include it
+        if (currentPersonaData) {
+          console.log("Persona data is available. Constructing persona-infused prompt.");
+          const personaPrompt = `The user's persona is: ${JSON.stringify(currentPersonaData)}. Based on this, respond to their query: "${userMessage}"`;
+          finalUserMessage = personaPrompt;
+          console.log("Sending persona-infused prompt to OpenAI:", finalUserMessage);
+        } else {
+          console.log("Persona data is NOT available. Sending original message to OpenAI.");
+        }
+
+        console.log("Full query sent to OpenAI:", finalUserMessage); // Added log
+        const aiResponse = await openAIService.getChatCompletion(finalUserMessage, internalChatbotData?.agentPersona, threadId);
         botResponse = aiResponse.response;
         if (aiResponse.threadId) {
           setThreadId(aiResponse.threadId);
@@ -447,7 +513,7 @@ export const useChatbotLogic = ({ chatbotData, previewMode }: UseChatbotLogicPro
       
       setMessageCount(prev => prev + 1);
     }
-  }, [message, isBotTyping, internalChatbotData, sessionId, threadId]);
+  }, [message, isBotTyping, internalChatbotData, sessionId, threadId, currentUser, userPersona]);
 
   const handleMessageChange = useCallback(async (e: React.ChangeEvent<HTMLTextAreaElement>) => {
     const value = e.target.value;
@@ -542,6 +608,16 @@ export const useChatbotLogic = ({ chatbotData, previewMode }: UseChatbotLogicPro
         // Update currentUser state to reflect the new LinkedIn URL
         setCurrentUser(prev => prev ? { ...prev, linkedin_profile_url: normalizedUrl } : null);
         setTimeout(() => setFeedbackMessage(""), 2000);
+
+        // Add a bot message to confirm the submission
+        const botMessage = {
+          id: crypto.randomUUID(),
+          text: "Thanks for submitting your LinkedIn profile! I will analyze it and get back to you shortly.",
+          sender: 'bot' as const,
+          timestamp: new Date()
+        };
+        setChatHistory(prev => [...prev, botMessage]);
+
       } else {
         setFeedbackMessage("Please enter a valid LinkedIn profile URL or username.");
         setTimeout(() => setFeedbackMessage(""), 2000);
@@ -559,6 +635,18 @@ export const useChatbotLogic = ({ chatbotData, previewMode }: UseChatbotLogicPro
       await LeadService.submitLead(internalChatbotData.id, sessionId, formData);
       setLeadFormSubmitted(true);
       setShowLeadForm(false);
+
+      // If the user is logged in and submitted a linkedin profile, update their main profile
+      if (currentUser && formData.linkedin_profile) {
+        const normalizedUrl = normalizeLinkedInUrl(formData.linkedin_profile);
+        if (normalizedUrl) {
+          console.log(`[useChatbotLogic] Updating user ${currentUser.user_id} profile with LinkedIn URL: ${normalizedUrl}`);
+          await ConversationService.updateLinkedInProfile(currentUser.user_id, normalizedUrl);
+          // Update local state to prevent re-prompting
+          setCurrentUser(prev => prev ? { ...prev, linkedin_profile_url: normalizedUrl, persona_data: true } : null);
+        }
+      }
+
       const successMessage = internalChatbotData?.lead_success_message || "Thank you! We will get back to you soon.";
       const thankYouMessage = {
         id: crypto.randomUUID(),
