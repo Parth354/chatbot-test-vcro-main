@@ -6,7 +6,6 @@ interface RouteLoggerProps {
 }
 
 const RouteLogger: React.FC<RouteLoggerProps> = ({ path, children }) => {
-  console.log(`App.tsx: Rendering route: ${path}`);
   return <>{children}</>;
 };
 

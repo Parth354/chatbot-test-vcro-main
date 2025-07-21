@@ -32,7 +32,6 @@ export * from "./progress";
 export * from "./radio-group";
 export * from "./resizable";
 export * from "./slider";
-export * from "./sonner";
 export * from "./toggle";
 export * from "./toggle-group";
 export * from "./tooltip";

@@ -13,11 +13,9 @@ export const useAgentSave = (formData: CreateAgentData, setValidationErrors: (er
   const [saving, setSaving] = useState(false);
 
   const handleSave = async () => {
-    console.log("AgentCreate: handleSave called.");
     setValidationErrors([]);
 
     const validation = validateAgentData(formData);
-    console.log("AgentCreate: Validation result:", validation);
 
     if (!validation.success) {
       const errorMessages = validation.errors.map(e => `${e.field}: ${e.message}`).join('\n');
@@ -60,17 +58,14 @@ export const useAgentSave = (formData: CreateAgentData, setValidationErrors: (er
 
     try {
       setSaving(true);
-      console.log("AgentCreate: Saving new agent data:", formData);
 
       const newAgent = await AgentService.createAgent(formData);
-      console.log("AgentCreate: New agent created:", newAgent);
       toast({
         title: "Success",
         description: "Agent created successfully!",
       });
       navigate(`/admin/agent/${newAgent.id}/customize`);
     } catch (error) {
-      console.error('AgentCreate: Failed to create agent. Raw error object:', error);
       toast({
         title: "Error",
         description: `An unexpected error occurred. Check the console for details.`,

@@ -34,7 +34,6 @@ export const useAgentLoad = ({ agentId, setAgent, setFormData, setHasUnsavedChan
         navigate('/admin');
         return;
       }
-      console.log("Agent data loaded:", agentData);
       setAgent(agentData);
       const newFormData = {
         name: agentData.name || '',
@@ -59,7 +58,6 @@ export const useAgentLoad = ({ agentId, setAgent, setFormData, setHasUnsavedChan
         openai_api_key: agentData.openai_api_key || '',
       };
       setFormData(newFormData);
-      console.log("FormData after setting:", newFormData);
       setHasUnsavedChanges(false);
     } catch (error) {
       console.error('Failed to load agent:', error);

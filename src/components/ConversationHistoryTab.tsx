@@ -158,7 +158,6 @@ export function ConversationHistoryTab({ agentId }: ConversationHistoryTabProps)
   };
 
   const handleDeleteConversation = async (sessionId: string) => {
-    console.log(`[handleDeleteConversation] Attempting to delete session: ${sessionId}`);
     if (confirm("Are you sure you want to delete this conversation? This action cannot be undone.")) {
       try {
         await ConversationService.hardDeleteChatSession(sessionId);
@@ -168,7 +167,6 @@ export function ConversationHistoryTab({ agentId }: ConversationHistoryTabProps)
         });
         loadConversations(); // Reload the list
       } catch (error) {
-        console.error('Error deleting conversation:', error);
         toast({
           variant: "destructive",
           title: "Error",
@@ -179,7 +177,6 @@ export function ConversationHistoryTab({ agentId }: ConversationHistoryTabProps)
   };
 
   const handleDeleteAllConversations = async () => {
-    console.log(`[handleDeleteAllConversations] Attempting to delete all sessions for agent: ${agentId}`);
     if (confirm("Are you sure you want to delete ALL conversations for this agent? Anonymous sessions will be permanently deleted, and authenticated sessions will be soft-deleted.")) {
       try {
         const allSessions = await ConversationService.getChatSessions(agentId, { includeDeleted: true });
@@ -196,7 +193,6 @@ export function ConversationHistoryTab({ agentId }: ConversationHistoryTabProps)
               softDeletedCount++;
             }
           } catch (innerError) {
-            console.error(`[handleDeleteAllConversations] Failed to delete session ${session.id}:`, innerError);
             toast({
               title: "Deletion Failed for a Session",
               description: `Could not delete session ${session.id}. See console for details.`, 
@@ -214,7 +210,6 @@ export function ConversationHistoryTab({ agentId }: ConversationHistoryTabProps)
         setConversations([]); // Clear sessions immediately
         loadConversations(); // Reload to confirm empty or updated list
       } catch (error) {
-        console.error('Error deleting all conversations:', error);
         toast({
           variant: "destructive",
           title: "Error",
@@ -498,7 +493,6 @@ export function ConversationHistoryTab({ agentId }: ConversationHistoryTabProps)
                 <Button
                   variant="destructive"
                   onClick={async () => {
-                    console.log(`[Delete Button Click] Clicked delete for session: ${selectedConversation?.id}`);
                     if (selectedConversation) {
                       await handleDeleteConversation(selectedConversation.id);
                       setIsDetailDialogOpen(false); // Close dialog after deletion

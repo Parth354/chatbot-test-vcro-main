@@ -17,7 +17,7 @@ const AuthCallback = () => {
         if (window.opener) {
           window.close();
         } else {
-          console.log("Chatbot login successful, but not in a popup. No main app navigation.");
+          
         }
       } else {
         navigate('/');

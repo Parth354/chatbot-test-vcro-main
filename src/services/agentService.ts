@@ -63,7 +63,7 @@ export class AgentService {
   }
 
   static async createAgent(agentData: CreateAgentData): Promise<Agent> {
-    console.log("AgentService: Attempting to get user session...");
+    
     const { data: { user }, error: userError } = await supabase.auth.getUser();
     
     if (userError) {
@@ -74,7 +74,7 @@ export class AgentService {
       console.error("AgentService: No authenticated user found.");
       throw new Error('User must be authenticated to create agents');
     }
-    console.log("AgentService: User session obtained. User ID:", user.id);
+    
 
     const insertData: any = {
       user_id: user.id,
@@ -105,8 +105,8 @@ export class AgentService {
       openai_assistant_id: agentData.openai_assistant_id || null,
     }
 
-    console.log("AgentService: Prepared insert data:", insertData);
-    console.log("AgentService: Attempting to insert new agent into 'agents' table...");
+    
+    
     const { data, error } = await supabase
       .from('agents')
       .insert(insertData)
@@ -117,7 +117,7 @@ export class AgentService {
       console.error("AgentService: Supabase insert error:", error);
       throw new Error(`Failed to create agent: ${error.message}`);
     }
-    console.log("AgentService: Agent created successfully:", data);
+    
 
     return this.parseAgentData(data)
   }
@@ -148,7 +148,7 @@ export class AgentService {
     if (agentData.ai_mode !== undefined) updateData.ai_mode = agentData.ai_mode
     if (agentData.openai_assistant_id !== undefined) updateData.openai_assistant_id = agentData.openai_assistant_id
 
-    console.log("Attempting to update agent data for ID:", id, "with data:", updateData);
+    
     const { data, error } = await supabase
       .from('agents')
       .update(updateData)
@@ -160,7 +160,7 @@ export class AgentService {
       console.error("Error updating agent:", error);
       throw new Error(`Failed to update agent: ${error.message}`);
     }
-    console.log("Agent updated successfully:", data);
+    
 
     return this.parseAgentData(data)
   }

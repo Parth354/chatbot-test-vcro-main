@@ -31,17 +31,17 @@ const AgentDashboard = () => {
   const location = useLocation();
 
   useEffect(() => {
-    console.log("AgentDashboard - useEffect triggered. agentId:", agentId, "location.key:", location.key);
+    
     const loadData = async () => {
       try {
         if (agentId && agentId !== 'new') {
-          console.log("AgentDashboard - Starting data load for agentId:", agentId);
+          
           setLoading(true);
           await loadAgent();
           await loadMetrics();
-          console.log("AgentDashboard - Data load complete.");
+          
         } else {
-          console.log("AgentDashboard - Skipping data load, agentId is new or undefined.", agentId);
+          
         }
       } finally {
         setLoading(false);
@@ -52,7 +52,7 @@ const AgentDashboard = () => {
 
   const loadAgent = async () => {
     if (!agentId || agentId === 'new') return
-    console.log("Loading agent...");
+    
     try {
       const agentData = await AgentService.getAgent(agentId)
       if (!agentData) {
@@ -65,7 +65,7 @@ const AgentDashboard = () => {
         return
       }
       setAgent(agentData)
-      console.log("Agent loaded successfully.");
+      
     } catch (error) {
       console.error('Failed to load agent:', error)
       toast({
@@ -79,7 +79,6 @@ const AgentDashboard = () => {
 
   const loadMetrics = async () => {
     if (!agentId || agentId === 'new') return
-    console.log("Loading metrics...");
     try {
       const metricsData = await AgentService.getAgentMetrics(agentId)
       setMetrics(metricsData)

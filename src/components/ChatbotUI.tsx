@@ -83,7 +83,6 @@ const ChatbotUIContent: React.FC<ChatbotUIProps> = ({ chatbotData, previewMode, 
   const genericProfileSvg = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='48' height='48' viewBox='0 0 24 24' fill='none' stroke='%236B7280' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2'/%3E%3Ccircle cx='12' cy='7' r='4'/%3E%3C/svg%3E";
 
   if (isLoading) {
-    console.log("ChatbotUI: Displaying loading spinner because isLoading is true.");
     return (
       <div className="flex items-center justify-center p-4">
         <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500"></div>

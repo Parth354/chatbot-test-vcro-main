@@ -267,7 +267,6 @@ export const useChatbotLogic = ({ chatbotData, previewMode }: UseChatbotLogicPro
       setHasMoreMessages(formattedMessages.length === MESSAGES_PER_LOAD);
       setHasChatHistory(formattedMessages.length > 0);
 
-      console.log("Session initialized/updated with agent ID:", internalChatbotData.id, "Session ID:", newSessionId, "User ID:", authUser?.id);
       sessionInitializedRef.current = true; // Mark session as initialized
 
     } catch (error) {
@@ -277,7 +276,6 @@ export const useChatbotLogic = ({ chatbotData, previewMode }: UseChatbotLogicPro
       SessionManager.setSessionCookie(fallbackSessionId);
       setIsLoggedIn(false); // Ensure logged out state on error
       setChatHistory([]); // Clear history on error
-      console.log("Using fallback session due to error:", fallbackSessionId);
       sessionInitializedRef.current = false; // Reset on error
     }
   }, [internalChatbotData?.id, authUser?.id, authLoading]);
@@ -294,7 +292,6 @@ export const useChatbotLogic = ({ chatbotData, previewMode }: UseChatbotLogicPro
         try {
           const persona = await AgentService.getUserPerformanceData(authUser.id);
           setUserPersona(persona);
-          console.log("Fetched and set user persona:", persona); // Log the fetched persona
         } catch (error) {
           console.error("Error fetching user persona on auth change:", error);
           setUserPersona(null);
@@ -443,32 +440,19 @@ export const useChatbotLogic = ({ chatbotData, previewMode }: UseChatbotLogicPro
     let isQnAMatch = false;
     let currentPersonaData = userPersona; // Use the state variable
 
-    console.log("--- handleSendMessage Debug ---");
-    console.log("currentUser:", currentUser);
-    console.log("currentUser?.persona_data:", currentUser?.persona_data);
-    console.log("userPersona (state):", userPersona);
-
     try {
       // --- Persona Data Fetching (Blocking if not already loaded) ---
       if (currentUser && currentUser.linkedin_profile_url && !currentPersonaData) {
-        console.log("Condition met: currentUser exists, linkedin_profile_url is present, and currentPersonaData is null. Attempting to fetch persona...");
-        try {
+       try {
           currentPersonaData = await AgentService.getUserPerformanceDataByLinkedIn(currentUser.linkedin_profile_url);
           setUserPersona(currentPersonaData); // Update state for future messages
-          console.log("Fetched persona data during send:", currentPersonaData);
           if (!currentPersonaData) {
             console.warn("No data found in user_performance table for user with LinkedIn URL:", currentUser.linkedin_profile_url);
           }
         } catch (personaError) {
           console.error("Error fetching persona data during message send:", personaError);
         }
-      } else if (currentUser && currentUser.linkedin_profile_url && currentPersonaData) {
-        console.log("Condition met: currentUser exists, linkedin_profile_url is present, and persona is already loaded.");
-      } else if (currentUser && !currentUser.linkedin_profile_url) {
-        console.log("Condition NOT met: currentUser exists, but linkedin_profile_url is FALSE.");
-      } else {
-        console.log("Condition NOT met: currentUser does not exist.");
-      }
+      } 
       // --- End Persona Data Fetching ---
 
       const lowerCaseMessage = userMessage.toLowerCase();

@@ -44,7 +44,7 @@ export const ConversationService = {
     );
 
     if (sessionsToDelete.length > 0) {
-      console.log(`[getChatSessions] Found ${sessionsToDelete.length} anonymous, empty sessions to delete.`);
+      
       const deletePromises = sessionsToDelete.map(session => this.hardDeleteChatSession(session.id));
       await Promise.all(deletePromises);
     }
@@ -151,14 +151,14 @@ export const ConversationService = {
     const storedSessionId = localStorage.getItem(storageKey);
     let finalSessionId: string | undefined = undefined;
 
-    console.log(`[createOrUpdateSession] Attempting to create or update session. Provided sessionId: ${sessionId}, Stored sessionId: ${storedSessionId}, userId: ${userId}, forChatbotWidget: ${forChatbotWidget}`);
+    
 
     if (userId) {
       // For authenticated users, try to find an existing session first
       const existingUserSession = await this.getLatestSessionForUserAndAgent(userId, agentId, forChatbotWidget);
       if (existingUserSession) {
         finalSessionId = existingUserSession.id;
-        console.log(`[createOrUpdateSession] Found existing session for user ${userId}: ${finalSessionId}`);
+        
       }
     }
 
@@ -174,7 +174,7 @@ export const ConversationService = {
         console.error("[createOrUpdateSession] Error checking for stored session:", error);
       } else if (data) {
         finalSessionId = data.id;
-        console.log(`[createOrUpdateSession] Found stored anonymous session: ${finalSessionId}`);
+        
       }
     }
 
@@ -194,7 +194,7 @@ export const ConversationService = {
     }
 
     // If no existing session found, create a new one
-    console.log("[createOrUpdateSession] No valid existing session found. Creating a new session.");
+    
     const { data: newSession, error: newSessionError } = await supabase
       .from("chat_sessions")
       .insert({ agent_id: agentId, user_id: userId })
@@ -206,7 +206,7 @@ export const ConversationService = {
       throw new Error(newSessionError.message);
     }
 
-    console.log(`[createOrUpdateSession] Successfully created new session: ${newSession.id}`);
+    
     localStorage.setItem(storageKey, newSession.id); // Store the new session ID
     return newSession.id;
   },
@@ -265,7 +265,7 @@ export const ConversationService = {
   },
 
   async softDeleteChatSession(sessionId: string): Promise<void> {
-    console.log(`[softDeleteChatSession] Attempting to soft-delete session: ${sessionId}`);
+    
     const { data, error } = await supabase
       .from("chat_sessions")
       .update({ deleted_by_admin: true } as Partial<ChatSession>)
@@ -279,21 +279,21 @@ export const ConversationService = {
       // Optionally throw an error here if no rows were affected and it's unexpected
       // throw new Error("Soft delete failed: No matching session found or RLS denied.");
     } else {
-      console.log(`[softDeleteChatSession] Successfully soft-deleted session ${sessionId}. Supabase response:`, { data, error });
+      
     }
   },
 
   async hardDeleteChatSession(sessionId: string): Promise<void> {
-    console.log(`[hardDeleteChatSession] Attempting to hard-delete session: ${sessionId}`);
+    
     const { data: user, error: userError } = await supabase.auth.getUser();
     if (user && user.user) {
-      console.log(`[hardDeleteChatSession] Current authenticated user ID: ${user.user.id}`);
+      
     } else {
-      console.log(`[hardDeleteChatSession] No authenticated user or error fetching user:`, userError);
+      
     }
 
     // First, check if the session is anonymous
-    console.log(`[hardDeleteChatSession] Fetching session details for ${sessionId} to check anonymity.`);
+    
     const { data: sessionData, error: sessionError } = await (supabase
       .from("chat_sessions")
       .select("user_id") as any)
@@ -307,13 +307,13 @@ export const ConversationService = {
 
     const session: { user_id: string | null } = sessionData;
 
-    console.log(`[hardDeleteChatSession] Session ${sessionId} user_id: ${session.user_id}`);
+    
 
     if (session.user_id === null) {
-      console.log(`[hardDeleteChatSession] Session ${sessionId} is anonymous. Performing hard delete.`);
+      
       // If anonymous, hard delete message feedback, then messages, and then the session
 
-      console.log(`[hardDeleteChatSession] Deleting chat session: ${sessionId} (cascading deletes for messages and feedback)`);
+      
       const { error: sessionDeleteError, data: sessionDeleteData } = await supabase
         .from("chat_sessions")
         .delete()
@@ -323,15 +323,15 @@ export const ConversationService = {
         console.error("[hardDeleteChatSession] Supabase Error (session delete):", sessionDeleteError);
         throw new Error(sessionDeleteError.message);
         } else if (sessionDeleteData && sessionDeleteData.length === 0) { // No matching rows found, which is fine
-        console.log(`[hardDeleteChatSession] No chat session found for session ${sessionId}.`);
+        
         } else {
-        console.log(`[hardDeleteChatSession] Session ${sessionId} hard deleted. Supabase response:`, { data: sessionDeleteData, error: sessionDeleteError });
+        
       }
     } else {
-      console.log(`[hardDeleteChatSession] Session ${sessionId} is not anonymous. Performing soft delete.`);
+      
       // If not anonymous, perform a soft delete (update deleted_by_admin flag)
       await this.softDeleteChatSession(sessionId);
-      console.log(`[hardDeleteChatSession] Soft delete initiated for session ${sessionId}.`);
+      
     }
   },
 

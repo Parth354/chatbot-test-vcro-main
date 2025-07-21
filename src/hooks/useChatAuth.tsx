@@ -1,7 +1,7 @@
 import { createContext, useContext, useEffect, useState } from 'react'
 import { User, Session } from '@supabase/supabase-js'
 import { supabase } from '@/integrations/supabase/client'
-import { Profile } from '@/types/agent'
+import { Profile } from '@/types/profile'
 
 interface ChatAuthContextType {
   user: User | null;

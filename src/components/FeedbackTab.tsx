@@ -36,7 +36,6 @@ export function FeedbackTab({ agentId }: FeedbackTabProps) {
       );
       setFeedback(data);
     } catch (error) {
-      console.error('Error loading feedback:', error);
       toast({
         variant: "destructive",
         title: "Error",
@@ -52,7 +51,6 @@ export function FeedbackTab({ agentId }: FeedbackTabProps) {
       const statsData = await FeedbackService.getFeedbackStats(agentId);
       setStats(statsData);
     } catch (error) {
-      console.error('Error loading feedback stats:', error);
     }
   };
 
