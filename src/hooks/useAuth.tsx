@@ -179,6 +179,10 @@ export const AuthProvider = ({ children, navigate }: { children: React.ReactNode
 
   const signOut = async () => {
     await supabase.auth.signOut();
+    setUser(null);
+    setProfile(null);
+    setSession(null);
+    navigate('/auth'); // Redirect to login page after sign out
   };
 
   const signInWithGoogle = async () => {
