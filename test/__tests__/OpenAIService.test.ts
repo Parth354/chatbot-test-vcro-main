@@ -3,33 +3,70 @@ import { OpenAIService } from '@/services/openAIService';
 import { OpenAI } from 'openai';
 
 // Mock the entire openai module
-vi.mock('openai', () => ({
-  OpenAI: vi.fn(() => ({
+vi.mock('openai', () => {
+  const mockChatCompletionsCreate = vi.fn();
+  const mockThreadsCreate = vi.fn();
+  const mockThreadsMessagesCreate = vi.fn();
+  const mockThreadsMessagesList = vi.fn();
+  const mockThreadsRunsCreateAndPoll = vi.fn();
+  const mockAssistantsList = vi.fn();
+  const mockModelsList = vi.fn();
+
+  const mockOpenAI = vi.fn(() => ({
     chat: {
       completions: {
-        create: vi.fn(),
+        create: mockChatCompletionsCreate,
       },
     },
     beta: {
       threads: {
-        create: vi.fn(),
+        create: mockThreadsCreate,
         messages: {
-          create: vi.fn(),
-          list: vi.fn(),
+          create: mockThreadsMessagesCreate,
+          list: mockThreadsMessagesList,
         },
         runs: {
-          createAndPoll: vi.fn(),
+          createAndPoll: mockThreadsRunsCreateAndPoll,
         },
       },
       assistants: {
-        list: vi.fn(),
+        list: mockAssistantsList,
       },
     },
     models: {
-      list: vi.fn(),
+      list: mockModelsList,
     },
-  })),
-}));
+  }));
+
+  // Expose the mocked functions for vi.mocked calls
+  mockOpenAI.prototype.chat = {
+    completions: {
+      create: mockChatCompletionsCreate,
+    },
+  };
+  mockOpenAI.prototype.beta = {
+    threads: {
+      create: mockThreadsCreate,
+      messages: {
+        create: mockThreadsMessagesCreate,
+        list: mockThreadsMessagesList,
+      },
+      runs: {
+        createAndPoll: mockThreadsRunsCreateAndPoll,
+      },
+    },
+    assistants: {
+      list: mockAssistantsList,
+    },
+  };
+  mockOpenAI.prototype.models = {
+    list: mockModelsList,
+  };
+
+  return {
+    OpenAI: mockOpenAI,
+  };
+});
 
 describe('OpenAIService', () => {
   const mockApiKey = 'test-api-key';

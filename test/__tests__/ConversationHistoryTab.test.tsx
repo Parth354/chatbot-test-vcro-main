@@ -1,6 +1,6 @@
 import { render, screen, waitFor, fireEvent } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { vi } from 'vitest';
+import { expect, vi } from 'vitest';
 import { ConversationHistoryTab } from '@/components/ConversationHistoryTab';
 import { ConversationService } from '@/services/conversationService';
 import { useToast } from '@/hooks/use-toast';

@@ -1,6 +1,6 @@
 import { render, screen, waitFor, fireEvent, act } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { vi } from 'vitest';
+import { expect, vi } from 'vitest';
 import ChatbotUI from '@/components/ChatbotUI';
 import { useChatbotLogic } from '@/hooks/useChatbotLogic';
 import { ChatbotLoginModal } from '@/components/ChatbotLoginModal';
@@ -13,11 +13,11 @@ vi.mock('@/hooks/useChatbotLogic', () => ({
 
 // Mock child components to simplify testing ChatbotUI itself
 vi.mock('@/components/ChatbotLoginModal', () => ({
-  ChatbotLoginModal: vi.fn(() => null), // Render nothing by default
+  default: vi.fn(() => null),
 }));
 
 vi.mock('@/components/LeadCollectionForm', () => ({
-  LeadCollectionForm: vi.fn(() => null), // Render nothing by default
+  default: vi.fn(() => null), // Render nothing by default
 }));
 
 describe('ChatbotUI', () => {

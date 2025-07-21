@@ -198,100 +198,94 @@ export const useChatbotLogic = ({ chatbotData, previewMode }: UseChatbotLogicPro
     }
   }, [chatHistory, isBotTyping, hasChatHistory]);
 
-  // Session initialization and user change handling
-  useEffect(() => {
-    const initializeSession = async () => {
-      // Prevent re-initialization if already done and dependencies haven't truly changed
-      if (sessionInitializedRef.current && sessionId && !authLoading && internalChatbotData?.id) {
-        console.log("Session already initialized and stable. Skipping re-initialization.");
-        return;
-      }
+  const initializeSession = useCallback(async () => {
+    if (authLoading || !internalChatbotData?.id) {
+      console.log("Waiting for auth state or chatbotData.id to initialize session.");
+      return;
+    }
 
-      if (authLoading || !internalChatbotData?.id) {
-        console.log("Waiting for auth state or chatbotData.id to initialize session.");
-        return;
-      }
+    try {
+      let newSessionId: string;
+      let initialMessages: any[] = [];
+      let shouldClearHistory = false; // Flag to control history clearing
 
-      try {
-        let newSessionId: string;
-        let initialMessages: any[] = [];
-        let shouldClearHistory = false; // Flag to control history clearing
-
-        if (authUser) {
-          // Try to find an existing session for the logged-in user and agent
-          const existingSession = await ConversationService.getLatestSessionForUserAndAgent(authUser.id, internalChatbotData.id, true);
-          if (existingSession) {
-            newSessionId = existingSession.id;
-            initialMessages = await ConversationService.getChatMessages(newSessionId, MESSAGES_PER_LOAD, 0, true);
-            console.log("Found existing session for user:", newSessionId);
-            // If existing session found, don't clear history unless it's a new login after signout
-            if (!sessionId || sessionId !== newSessionId) { // Check if session ID actually changed
-              shouldClearHistory = true;
-            }
-          } else {
-            // If no existing session, create a new one for the user
-            newSessionId = await ConversationService.createOrUpdateSession(
-              internalChatbotData.id,
-              undefined, // No current session ID to pass, as we want a user-specific one
-              authUser.id,
-              true // forChatbotWidget
-            );
-            console.log("Created new session for user:", newSessionId);
-            shouldClearHistory = true; // New session, so clear history
-          }
-        } else {
-          // For anonymous users, use or create a session based on cookie
-          const currentSessionId = SessionManager.getSessionCookie();
-          newSessionId = await ConversationService.createOrUpdateSession(
-            internalChatbotData.id,
-            currentSessionId,
-            undefined,
-            true // forChatbotWidget
-          );
+      if (authUser) {
+        // Try to find an existing session for the logged-in user and agent
+        const existingSession = await ConversationService.getLatestSessionForUserAndAgent(authUser.id, internalChatbotData.id, true);
+        if (existingSession) {
+          newSessionId = existingSession.id;
           initialMessages = await ConversationService.getChatMessages(newSessionId, MESSAGES_PER_LOAD, 0, true);
-          console.log("Initialized anonymous session:", newSessionId);
-          // Only clear history if it's a new anonymous session (e.g., after logout)
+          console.log("Found existing session for user:", newSessionId);
+          // If existing session found, don't clear history unless it's a new login after signout
           if (!sessionId || sessionId !== newSessionId) { // Check if session ID actually changed
             shouldClearHistory = true;
           }
+        } else {
+          // If no existing session, create a new one for the user
+          newSessionId = await ConversationService.createOrUpdateSession(
+            internalChatbotData.id,
+            undefined, // No current session ID to pass, as we want a user-specific one
+            authUser.id,
+            true // forChatbotWidget
+          );
+          console.log("Created new session for user:", newSessionId);
+          shouldClearHistory = true; // New session, so clear history
         }
-
-        setSessionId(newSessionId);
-        SessionManager.setSessionCookie(newSessionId);
-        setIsLoggedIn(!!authUser); // Update isLoggedIn state based on authUser presence
-
-        if (shouldClearHistory) {
-          setChatHistory([]); // Clear history only if a new session is genuinely started
+      } else {
+        // For anonymous users, use or create a session based on cookie
+        const currentSessionId = SessionManager.getSessionCookie();
+        newSessionId = await ConversationService.createOrUpdateSession(
+          internalChatbotData.id,
+          currentSessionId,
+          undefined,
+          true // forChatbotWidget
+        );
+        initialMessages = await ConversationService.getChatMessages(newSessionId, MESSAGES_PER_LOAD, 0, true);
+        console.log("Initialized anonymous session:", newSessionId);
+        // Only clear history if it's a new anonymous session (e.g., after logout)
+        if (!sessionId || sessionId !== newSessionId) { // Check if session ID actually changed
+          shouldClearHistory = true;
         }
-
-        const formattedMessages = initialMessages.map(msg => ({
-          id: msg.id,
-          text: msg.content,
-          sender: msg.sender,
-          timestamp: new Date(msg.created_at),
-        }));
-        setChatHistory(formattedMessages);
-        setMessagesOffset(formattedMessages.length);
-        setHasMoreMessages(formattedMessages.length === MESSAGES_PER_LOAD);
-        setHasChatHistory(formattedMessages.length > 0);
-
-        console.log("Session initialized/updated with agent ID:", internalChatbotData.id, "Session ID:", newSessionId, "User ID:", authUser?.id);
-        sessionInitializedRef.current = true; // Mark session as initialized
-
-      } catch (error) {
-        console.error("Failed to initialize session:", error);
-        const fallbackSessionId = SessionManager.generateSessionId();
-        setSessionId(fallbackSessionId);
-        SessionManager.setSessionCookie(fallbackSessionId);
-        setIsLoggedIn(false); // Ensure logged out state on error
-        setChatHistory([]); // Clear history on error
-        console.log("Using fallback session due to error:", fallbackSessionId);
-        sessionInitializedRef.current = false; // Reset on error
       }
-    };
 
-    initializeSession();
+      setSessionId(newSessionId);
+      SessionManager.setSessionCookie(newSessionId);
+      setIsLoggedIn(!!authUser); // Update isLoggedIn state based on authUser presence
+
+      if (shouldClearHistory) {
+        setChatHistory([]); // Clear history only if a new session is genuinely started
+      }
+
+      const formattedMessages = initialMessages.map(msg => ({
+        id: msg.id,
+        text: msg.content,
+        sender: msg.sender,
+        timestamp: new Date(msg.created_at),
+      }));
+      setChatHistory(formattedMessages);
+      setMessagesOffset(formattedMessages.length);
+      setHasMoreMessages(formattedMessages.length === MESSAGES_PER_LOAD);
+      setHasChatHistory(formattedMessages.length > 0);
+
+      console.log("Session initialized/updated with agent ID:", internalChatbotData.id, "Session ID:", newSessionId, "User ID:", authUser?.id);
+      sessionInitializedRef.current = true; // Mark session as initialized
+
+    } catch (error) {
+      console.error("Failed to initialize session:", error);
+      const fallbackSessionId = SessionManager.generateSessionId();
+      setSessionId(fallbackSessionId);
+      SessionManager.setSessionCookie(fallbackSessionId);
+      setIsLoggedIn(false); // Ensure logged out state on error
+      setChatHistory([]); // Clear history on error
+      console.log("Using fallback session due to error:", fallbackSessionId);
+      sessionInitializedRef.current = false; // Reset on error
+    }
   }, [internalChatbotData?.id, authUser?.id, authLoading]);
+
+  // Session initialization and user change handling
+  useEffect(() => {
+    initializeSession();
+  }, [initializeSession]);
 
   // Fetch user persona data when user logs in or persona_data flag changes
   useEffect(() => {
@@ -358,8 +352,6 @@ export const useChatbotLogic = ({ chatbotData, previewMode }: UseChatbotLogicPro
           setCurrentUser(profile as Profile);
           setIsLoggedIn(true);
         } else {
-          // This case might happen if the profile creation is delayed or fails.
-          // For now, we assume the AuthProvider handles profile creation.
           console.warn("Profile not found for authenticated user:", authUser.id);
           setCurrentUser(null);
           setIsLoggedIn(false);
@@ -637,7 +629,11 @@ export const useChatbotLogic = ({ chatbotData, previewMode }: UseChatbotLogicPro
     setTimeout(() => setFeedbackMessage(""), 2000);
   }, [sessionId]);
 
-  const handleLoginClick = useCallback(() => setShowLoginModal(prev => !prev), []);
+  const handleLoginClick = useCallback(() => {
+    if (!authLoading) {
+      setShowLoginModal(prev => !prev);
+    }
+  }, [authLoading]);
 
   const handleLoginSuccess = useCallback(async (user: any) => {
     // Fetch the full profile data after successful login
@@ -657,7 +653,6 @@ export const useChatbotLogic = ({ chatbotData, previewMode }: UseChatbotLogicPro
       setCurrentUser(profile as Profile);
       setIsLoggedIn(true);
       setShowLoginModal(false); // Close modal only after successful profile fetch
-      // Let initializeSession handle chat history clearing/loading
     } else {
       console.error("Profile not found after login for user:", user.id);
       setIsLoggedIn(false);
@@ -804,5 +799,6 @@ export const useChatbotLogic = ({ chatbotData, previewMode }: UseChatbotLogicPro
     handleLeadFormCancel,
     setLinkedinUrlInput,
     handleCtaButtonClick,
+    authLoading,
   };
 };

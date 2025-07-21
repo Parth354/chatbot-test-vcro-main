@@ -114,27 +114,7 @@ export default function ChatbotLoginModal({ isOpen, onClose, onSuccess }: Chatbo
 
         {!otpSent ? (
           <div className="space-y-4">
-            <div>
-              <Label htmlFor="email">Email Address</Label>
-              <Input
-                id="email"
-                type="email"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                placeholder="Enter your email"
-                disabled={loading}
-              />
-            </div>
-
-            <Button 
-              onClick={handleEmailSubmit}
-              disabled={loading || !email}
-              className="w-full"
-            >
-              {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-              <Mail className="mr-2 h-4 w-4" />
-              Send Login Code
-            </Button>
+            
 
             <Button 
               onClick={signInWithGoogle}

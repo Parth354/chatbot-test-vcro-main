@@ -14,7 +14,7 @@ import { useAuth } from "@/hooks/useAuth"
 
 const Auth = () => {
   const { toast } = useToast()
-  const { signInWithGoogleForAdmin } = useAuth();
+  const { signInWithGoogleForAdmin, signInWithPasswordForAdmin } = useAuth();
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<{
     email?: string;
@@ -53,30 +53,19 @@ const Auth = () => {
     }
 
     try {
-      const { data, error: authError } = await supabase.auth.signInWithPassword({
+      await signInWithPasswordForAdmin({
         email: signInData.email,
         password: signInData.password
       });
-
-      if (authError) {
-        if (authError.message.includes("Invalid login credentials")) {
-          setError(prev => ({ ...prev, general: "Invalid email or password" }));
-        } else if (authError.message.includes("Email not confirmed")) {
-          setError(prev => ({ ...prev, general: "Please check your email and click the confirmation link before signing in" }));
-        } else {
-          setError(prev => ({ ...prev, general: authError.message }));
-        }
-        return;
+      // Redirect is handled by the AuthProvider
+    } catch (authError: any) {
+      if (authError.message.includes("Invalid login credentials")) {
+        setError(prev => ({ ...prev, general: "Invalid email or password" }));
+      } else if (authError.message.includes("Email not confirmed")) {
+        setError(prev => ({ ...prev, general: "Please check your email and click the confirmation link before signing in" }));
+      } else {
+        setError(prev => ({ ...prev, general: authError.message }));
       }
-
-      if (data.user) {
-        toast({
-          title: "Success",
-          description: "Welcome back!"
-        });
-      }
-    } catch (err) {
-      setError(prev => ({ ...prev, general: "An unexpected error occurred" }));
     } finally {
       setLoading(false);
     }
@@ -314,3 +303,4 @@ const Auth = () => {
 }
 
 export default Auth
+

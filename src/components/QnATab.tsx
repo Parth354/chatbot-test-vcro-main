@@ -261,15 +261,15 @@ export function QnATab({ agentId }: QnATabProps) {
           ) : (
             <div className="grid gap-4">
               {suggestedPrompts.map((prompt) => (
-                <Card key={prompt.id}>
+                <Card key={prompt.id} data-testid={`prompt-card-${prompt.id}`}>
                   <CardHeader className="pb-3">
                     <div className="flex items-start justify-between">
                       <CardTitle className="text-base">{prompt.prompt}</CardTitle>
                       <div className="flex space-x-1">
-                        <Button size="sm" variant="outline" onClick={() => handleEdit(prompt)}>
+                        <Button size="sm" variant="outline" onClick={() => handleEdit(prompt)} aria-label={`Edit ${prompt.prompt}`}>
                           <Edit className="w-3 h-3" />
                         </Button>
-                        <Button size="sm" variant="outline" onClick={() => handleDelete(prompt.id)}>
+                        <Button size="sm" variant="outline" onClick={() => handleDelete(prompt.id)} aria-label={`Delete ${prompt.prompt}`}>
                           <Trash2 className="w-3 h-3" />
                         </Button>
                       </div>
@@ -298,7 +298,7 @@ export function QnATab({ agentId }: QnATabProps) {
           ) : (
             <div className="grid gap-4">
               {dynamicPrompts.map((prompt) => (
-                <Card key={prompt.id}>
+                <Card key={prompt.id} data-testid={`prompt-card-${prompt.id}`}>
                   <CardHeader className="pb-3">
                     <div className="flex items-start justify-between">
                       <div>
@@ -312,10 +312,10 @@ export function QnATab({ agentId }: QnATabProps) {
                         </div>
                       </div>
                       <div className="flex space-x-1">
-                        <Button size="sm" variant="outline" onClick={() => handleEdit(prompt)}>
+                        <Button size="sm" variant="outline" onClick={() => handleEdit(prompt)} aria-label={`Edit ${prompt.prompt}`}>
                           <Edit className="w-3 h-3" />
                         </Button>
-                        <Button size="sm" variant="outline" onClick={() => handleDelete(prompt.id)}>
+                        <Button size="sm" variant="outline" onClick={() => handleDelete(prompt.id)} aria-label={`Delete ${prompt.prompt}`}>
                           <Trash2 className="w-3 h-3" />
                         </Button>
                       </div>

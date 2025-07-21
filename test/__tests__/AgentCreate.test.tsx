@@ -1,6 +1,6 @@
 import { render, screen, waitFor, fireEvent } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { vi } from 'vitest';
+import { expect, vi } from 'vitest';
 import { MemoryRouter, Routes, Route } from 'react-router-dom';
 import AgentCreate from '@/pages/AgentCreate';
 import { useAuth } from '@/hooks/useAuth';
@@ -36,8 +36,9 @@ vi.mock('@/components/ChatbotUI', () => ({
   default: vi.fn(() => <div data-testid="mock-chatbot-ui">Mock Chatbot UI</div>),
 }));
 
+const mockNavigate = vi.fn();
+
 describe('AgentCreate', () => {
-  const mockNavigate = vi.fn();
   const mockToast = vi.fn();
   const mockUser = { id: 'user-123', email: 'test@example.com' };
 

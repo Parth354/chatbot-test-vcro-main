@@ -1,6 +1,6 @@
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { vi } from 'vitest';
+import { expect, vi } from 'vitest';
 import { MemoryRouter, Routes, Route } from 'react-router-dom';
 import Index from '@/pages/Index';
 import ChatbotUI from '@/components/ChatbotUI';
@@ -16,6 +16,17 @@ vi.mock('@/components/ChatbotUI', () => ({
     </div>
   )),
 }));
+
+// Mock react-router-dom explicitly
+vi.mock('react-router-dom', async (importOriginal) => {
+  const actual = await importOriginal();
+  return {
+    ...actual,
+    MemoryRouter: actual.MemoryRouter,
+    Routes: actual.Routes,
+    Route: actual.Route,
+  };
+});
 
 describe('Index Page', () => {
   const originalClipboard = { ...navigator.clipboard };

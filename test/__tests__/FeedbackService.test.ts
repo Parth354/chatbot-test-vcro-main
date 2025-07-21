@@ -2,66 +2,63 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { FeedbackService } from '@/services/feedbackService';
 import { supabase } from '@/integrations/supabase/client';
 
+
+
 // Mock supabase client
-vi.mock('@/integrations/supabase/client', () => ({
-  supabase: {
-    from: vi.fn(() => ({
-      select: vi.fn(() => ({
-        eq: vi.fn(() => ({
-          maybeSingle: vi.fn(),
-          single: vi.fn(),
-          in: vi.fn(() => ({
-            order: vi.fn(),
-            then: vi.fn(),
-          })),
-          order: vi.fn(),
-        })),
-        insert: vi.fn(() => ({
-          select: vi.fn(() => ({
-            single: vi.fn(),
-          })),
-        })),
-        update: vi.fn(() => ({
-          eq: vi.fn(),
-        })),
-      })),
-    })),
-  },
-}));
+vi.mock('@/integrations/supabase/client', () => {
+  const mockFrom = vi.fn().mockImplementation(() => {
+    const chain: any = {
+      select: vi.fn().mockReturnThis(),
+      insert: vi.fn().mockReturnThis(),
+      update: vi.fn().mockReturnThis(),
+      delete: vi.fn().mockReturnThis(),
+      eq: vi.fn().mockReturnThis(),
+      in: vi.fn().mockReturnThis(),
+      order: vi.fn().mockReturnThis(),
+      limit: vi.fn().mockReturnThis(),
+      range: vi.fn().mockReturnThis(),
+      single: vi.fn().mockResolvedValue({ data: {}, error: null }),
+      maybeSingle: vi.fn().mockResolvedValue({ data: {}, error: null }),
+    };
+    return chain;
+  });
+
+  return {
+    supabase: {
+      from: mockFrom,
+      auth: {
+        getUser: vi.fn(),
+      },
+    },
+  };
+});
+
+
 
 describe('FeedbackService', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    // Reset supabase.from mock for each test
+    vi.mocked(supabase.from).mockClear();
   });
 
   describe('createFeedback / addFeedback', () => {
     it('should add new feedback if it does not exist', async () => {
-      const mockSessionId = 'valid-session-id';
-      const mockMessageId = 'valid-message-id';
+      const mockSessionId = '123e4567-e89b-12d3-a456-426614174000'; // Valid UUID
+      const mockMessageId = '234e5678-f90c-34e5-b567-537725285111'; // Valid UUID
       const mockFeedbackType = 'up';
 
-      vi.mocked(supabase.from).mockImplementation((tableName) => {
-        if (tableName === 'message_feedback') {
-          return {
-            select: vi.fn(() => ({
-              eq: vi.fn(() => ({
-                maybeSingle: vi.fn().mockResolvedValue({ data: null, error: null }),
-              })),
-            })),
-            insert: vi.fn(() => ({
-              select: vi.fn(() => ({
-                single: vi.fn().mockResolvedValue({ data: {}, error: null }),
-              })),
-            })),
-          } as any;
-        }
-        return {} as any; // Fallback for other tables
-      });
+      vi.mocked(supabase.from).mockReturnValue({
+        select: vi.fn().mockReturnThis(),
+        eq: vi.fn().mockReturnThis(),
+        maybeSingle: vi.fn().mockResolvedValue({ data: null, error: null }),
+        insert: vi.fn().mockReturnThis(),
+      } as any);
 
       await FeedbackService.createFeedback(mockSessionId, mockMessageId, mockFeedbackType);
 
       expect(supabase.from).toHaveBeenCalledWith('message_feedback');
-      expect(supabase.from('message_feedback').insert).toHaveBeenCalledWith({
+      expect(vi.mocked(supabase.from('message_feedback').insert).mock.calls[0][0]).toEqual({
         session_id: mockSessionId,
         message_id: mockMessageId,
         feedback_type: mockFeedbackType,
@@ -69,39 +66,33 @@ describe('FeedbackService', () => {
     });
 
     it('should update existing feedback if it already exists', async () => {
-      const mockSessionId = 'valid-session-id';
-      const mockMessageId = 'valid-message-id';
+      const mockSessionId = '123e4567-e89b-12d3-a456-426614174000'; // Valid UUID
+      const mockMessageId = '234e5678-f90c-34e5-b567-537725285111'; // Valid UUID
       const mockFeedbackType = 'down';
       const mockExistingFeedbackId = 'existing-feedback-id';
 
-      vi.mocked(supabase.from).mockImplementation((tableName) => {
-        if (tableName === 'message_feedback') {
-          return {
-            select: vi.fn(() => ({
-              eq: vi.fn(() => ({
-                maybeSingle: vi.fn().mockResolvedValue({ data: { id: mockExistingFeedbackId }, error: null }),
-              })),
-            })),
-            update: vi.fn(() => ({
-              eq: vi.fn().mockResolvedValue({ data: {}, error: null }),
-            })),
-          } as any;
-        }
-        return {} as any; // Fallback for other tables
-      });
+      const eq = vi.fn().mockReturnThis();
+      vi.mocked(supabase.from).mockReturnValue({
+        select: vi.fn().mockReturnThis(),
+        eq: vi.fn().mockReturnThis(),
+        maybeSingle: vi.fn().mockResolvedValue({ data: { id: mockExistingFeedbackId }, error: null }),
+        update: vi.fn(() => ({
+          eq,
+        })),
+      } as any);
 
       await FeedbackService.createFeedback(mockSessionId, mockMessageId, mockFeedbackType);
 
       expect(supabase.from).toHaveBeenCalledWith('message_feedback');
-      expect(supabase.from('message_feedback').update).toHaveBeenCalledWith({
+      expect(vi.mocked(supabase.from('message_feedback').update).mock.calls[0][0]).toEqual({
         feedback_type: mockFeedbackType,
       });
-      expect(supabase.from('message_feedback').update().eq).toHaveBeenCalledWith('id', mockExistingFeedbackId);
+      expect(eq).toHaveBeenCalledWith('id', mockExistingFeedbackId);
     });
 
     it('should throw an error for invalid session ID format', async () => {
       const invalidSessionId = 'invalid-uuid';
-      const mockMessageId = 'valid-message-id';
+      const mockMessageId = '234e5678-f90c-34e5-b567-537725285111';
       const mockFeedbackType = 'up';
 
       await expect(FeedbackService.createFeedback(invalidSessionId, mockMessageId, mockFeedbackType)).rejects.toThrow(
@@ -110,7 +101,7 @@ describe('FeedbackService', () => {
     });
 
     it('should throw an error for invalid message ID format', async () => {
-      const mockSessionId = 'valid-session-id';
+      const mockSessionId = '123e4567-e89b-12d3-a456-426614174000';
       const invalidMessageId = 'invalid-uuid';
       const mockFeedbackType = 'up';
 
@@ -120,56 +111,38 @@ describe('FeedbackService', () => {
     });
 
     it('should throw an error if insert fails', async () => {
-      const mockSessionId = 'valid-session-id';
-      const mockMessageId = 'valid-message-id';
+      const mockSessionId = '123e4567-e89b-12d3-a456-426614174000';
+      const mockMessageId = '234e5678-f90c-34e5-b567-537725285111';
       const mockFeedbackType = 'up';
       const mockError = new Error('Insert failed');
 
-      vi.mocked(supabase.from).mockImplementation((tableName) => {
-        if (tableName === 'message_feedback') {
-          return {
-            select: vi.fn(() => ({
-              eq: vi.fn(() => ({
-                maybeSingle: vi.fn().mockResolvedValue({ data: null, error: null }),
-              })),
-            })),
-            insert: vi.fn(() => ({
-              select: vi.fn(() => ({
-                single: vi.fn().mockResolvedValue({ data: null, error: mockError }),
-              })),
-            })),
-          } as any;
-        }
-        return {} as any; // Fallback for other tables
-      });
+      vi.mocked(supabase.from).mockReturnValue({
+        select: vi.fn().mockReturnThis(),
+        eq: vi.fn().mockReturnThis(),
+        maybeSingle: vi.fn().mockResolvedValue({ data: null, error: null }),
+        insert: vi.fn().mockResolvedValue({ error: mockError }),
+      } as any);
 
       await expect(FeedbackService.createFeedback(mockSessionId, mockMessageId, mockFeedbackType)).rejects.toThrow(
-        mockError.message
+        mockError
       );
     });
 
     it('should throw an error if update fails', async () => {
-      const mockSessionId = 'valid-session-id';
-      const mockMessageId = 'valid-message-id';
+      const mockSessionId = '123e4567-e89b-12d3-a456-426614174000';
+      const mockMessageId = '234e5678-f90c-34e5-b567-537725285111';
       const mockFeedbackType = 'down';
       const mockExistingFeedbackId = 'existing-feedback-id';
       const mockError = new Error('Update failed');
 
-      vi.mocked(supabase.from).mockImplementation((tableName) => {
-        if (tableName === 'message_feedback') {
-          return {
-            select: vi.fn(() => ({
-              eq: vi.fn(() => ({
-                maybeSingle: vi.fn().mockResolvedValue({ data: { id: mockExistingFeedbackId }, error: null }),
-              })),
-            })),
-            update: vi.fn(() => ({
-              eq: vi.fn().mockResolvedValue({ data: null, error: mockError }),
-            })),
-          } as any;
-        }
-        return {} as any; // Fallback for other tables
-      });
+      vi.mocked(supabase.from).mockReturnValue({
+        select: vi.fn().mockReturnThis(),
+        eq: vi.fn().mockReturnThis(),
+        maybeSingle: vi.fn().mockResolvedValue({ data: { id: mockExistingFeedbackId }, error: null }),
+        update: vi.fn().mockReturnValue({
+          eq: vi.fn().mockResolvedValue({ data: null, error: mockError }),
+        }),
+      } as any);
 
       await expect(FeedbackService.createFeedback(mockSessionId, mockMessageId, mockFeedbackType)).rejects.toThrow(
         mockError.message
@@ -191,57 +164,42 @@ describe('FeedbackService', () => {
         { id: 'm2', content: 'Bot message 2', sender: 'bot', created_at: new Date().toISOString() },
       ];
 
-      vi.mocked(supabase.from).mockImplementation((tableName) => {
+      vi.mocked(supabase.from).mockImplementation((tableName: string) => {
         if (tableName === 'chat_sessions') {
           return {
-            select: vi.fn(() => ({
-              eq: vi.fn(() => ({
-                then: vi.fn().mockResolvedValue({ data: mockSessions, error: null }),
-                in: vi.fn(() => ({
-                  then: vi.fn().mockResolvedValue({ data: mockSessions, error: null }),
-                })),
-              })),
-            })),
+            select: vi.fn().mockReturnThis(),
+            eq: vi.fn().mockResolvedValue({ data: mockSessions, error: null }),
+            in: vi.fn().mockResolvedValue({ data: mockSessions, error: null }),
           } as any;
-        } else if (tableName === 'profiles') {
+        }
+        if (tableName === 'profiles') {
           return {
-            select: vi.fn(() => ({
-              in: vi.fn(() => ({
-                then: vi.fn().mockResolvedValue({ data: mockProfiles, error: null }),
-              })),
-            })),
+            select: vi.fn().mockReturnThis(),
+            in: vi.fn().mockResolvedValue({ data: mockProfiles, error: null }),
           } as any;
-        } else if (tableName === 'message_feedback') {
+        }
+        if (tableName === 'message_feedback') {
           return {
-            select: vi.fn(() => ({
-              in: vi.fn(() => ({
-                order: vi.fn(() => ({
-                  then: vi.fn().mockResolvedValue({ data: mockFeedbackData, error: null }),
-                })),
-              })),
-              eq: vi.fn(() => ({
-                in: vi.fn(() => ({
-                  order: vi.fn(() => ({
-                    then: vi.fn().mockResolvedValue({ data: mockFeedbackData, error: null }),
-                  })),
-                })),
-              })),
-            })),
+            select: vi.fn().mockReturnThis(),
+            in: vi.fn().mockReturnThis(),
+            order: vi.fn().mockResolvedValue({ data: mockFeedbackData, error: null }),
           } as any;
-        } else if (tableName === 'chat_messages') {
+        }
+        if (tableName === 'chat_messages') {
           return {
-            select: vi.fn(() => ({
-              eq: vi.fn(() => ({
-                maybeSingle: vi.fn((query) => {
-                  const messageId = query.mock.calls[0][1];
-                  const message = mockMessages.find(m => m.id === messageId);
-                  return Promise.resolve({ data: message, error: null });
-                }),
-              })),
+            select: vi.fn().mockReturnThis(),
+            eq: vi.fn().mockImplementation((column, value) => ({
+              maybeSingle: vi.fn().mockResolvedValue({ data: mockMessages.find(m => m.id === value), error: null }),
             })),
           } as any;
         }
-        return {} as any;
+        return {
+          select: vi.fn().mockReturnThis(),
+          eq: vi.fn().mockReturnThis(),
+          in: vi.fn().mockReturnThis(),
+          order: vi.fn().mockReturnThis(),
+          maybeSingle: vi.fn().mockResolvedValue({ data: null, error: null }),
+        } as any;
       });
 
       const feedback = await FeedbackService.getFeedbackForAgent(mockAgentId);
@@ -264,46 +222,48 @@ describe('FeedbackService', () => {
       const mockMessages = [
         { id: 'm1', content: 'Bot message 1', sender: 'bot', created_at: new Date().toISOString() },
       ];
+      const mockProfiles = [{ user_id: 'u1', full_name: 'User One', email: 'u1@example.com' }];
 
-      vi.mocked(supabase.from).mockImplementation((tableName) => {
+      const eq = vi.fn().mockReturnThis();
+      const order = vi.fn().mockResolvedValue({ data: mockFeedbackData, error: null });
+      vi.mocked(supabase.from).mockImplementation((tableName: string) => {
         if (tableName === 'chat_sessions') {
           return {
-            select: vi.fn(() => ({
-              eq: vi.fn(() => ({
-                then: vi.fn().mockResolvedValue({ data: mockSessions, error: null }),
-                in: vi.fn(() => ({
-                  then: vi.fn().mockResolvedValue({ data: mockSessions, error: null }),
-                })),
-              })),
-            })),
+            select: vi.fn().mockReturnThis(),
+            eq: vi.fn().mockResolvedValue({ data: mockSessions, error: null }),
+            in: vi.fn().mockResolvedValue({ data: mockSessions, error: null }),
           } as any;
-        } else if (tableName === 'message_feedback') {
+        }
+        if (tableName === 'profiles') {
           return {
-            select: vi.fn(() => ({
-              in: vi.fn(() => ({
-                order: vi.fn(() => ({
-                  then: vi.fn().mockResolvedValue({ data: mockFeedbackData, error: null }),
-                })),
-              })),
-              eq: vi.fn(() => ({
-                in: vi.fn(() => ({
-                  order: vi.fn(() => ({
-                    then: vi.fn().mockResolvedValue({ data: mockFeedbackData, error: null }),
-                  })),
-                })),
-              })),
-            })),
+            select: vi.fn().mockReturnThis(),
+            in: vi.fn().mockResolvedValue({ data: mockProfiles, error: null }),
           } as any;
-        } else if (tableName === 'chat_messages') {
+        }
+        if (tableName === 'message_feedback') {
+          const query: any = {
+            select: vi.fn().mockReturnThis(),
+            in: vi.fn().mockReturnThis(),
+            order: vi.fn().mockReturnThis(),
+          };
+          query.eq = vi.fn(() => query);
+          query.then = vi.fn((resolve) => resolve({ data: mockFeedbackData, error: null }));
+          return query;
+        }
+        if (tableName === 'chat_messages') {
           return {
-            select: vi.fn(() => ({
-              eq: vi.fn(() => ({
-                maybeSingle: vi.fn().mockResolvedValue({ data: mockMessages[0], error: null }),
-              })),
+            select: vi.fn().mockReturnThis(),
+            eq: vi.fn().mockImplementation((column, value) => ({
+              maybeSingle: vi.fn().mockResolvedValue({ data: mockMessages.find(m => m.id === value), error: null }),
             })),
           } as any;
         }
-        return {} as any;
+        return {
+          select: vi.fn().mockReturnThis(),
+          eq: vi.fn().mockReturnThis(),
+          in: vi.fn().mockReturnThis(),
+          order: vi.fn().mockReturnThis(),
+        } as any;
       });
 
       const feedback = await FeedbackService.getFeedbackForAgent(mockAgentId, 'up');
@@ -313,18 +273,10 @@ describe('FeedbackService', () => {
     });
 
     it('should return empty array if no sessions found', async () => {
-      vi.mocked(supabase.from).mockImplementation((tableName) => {
-        if (tableName === 'chat_sessions') {
-          return {
-            select: vi.fn(() => ({
-              eq: vi.fn(() => ({
-                then: vi.fn().mockResolvedValue({ data: [], error: null }),
-              })),
-            })),
-          } as any;
-        }
-        return {} as any;
-      });
+      vi.mocked(supabase.from).mockReturnValue({
+        select: vi.fn().mockReturnThis(),
+        eq: vi.fn().mockResolvedValue({ data: [], error: null }),
+      } as any);
 
       const feedback = await FeedbackService.getFeedbackForAgent('agent-123');
       expect(feedback).toHaveLength(0);
@@ -332,28 +284,25 @@ describe('FeedbackService', () => {
 
     it('should handle errors when fetching feedback', async () => {
       const mockError = new Error('Feedback fetch error');
-      vi.mocked(supabase.from).mockImplementation((tableName) => {
+      vi.mocked(supabase.from).mockImplementation((tableName: string) => {
         if (tableName === 'chat_sessions') {
           return {
-            select: vi.fn(() => ({
-              eq: vi.fn(() => ({
-                then: vi.fn().mockResolvedValue({ data: [{ id: 's1' }], error: null }),
-              })),
-            })),
-          } as any;
-        } else if (tableName === 'message_feedback') {
-          return {
-            select: vi.fn(() => ({
-              in: vi.fn(() => ({
-                order: vi.fn(() => ({
-                  then: vi.fn().mockResolvedValue({ data: null, error: mockError }),
-                })),
-              })),
-            })),
+            select: vi.fn().mockReturnThis(),
+            eq: vi.fn().mockResolvedValue({ data: [{ id: 's1' }], error: null }),
           } as any;
         }
-        return {} as any;
+        if (tableName === 'message_feedback') {
+          return {
+            select: vi.fn().mockReturnThis(),
+            in: vi.fn().mockReturnThis(),
+            order: vi.fn().mockResolvedValue({ data: null, error: mockError }),
+          } as any;
+        }
+        return {
+          select: vi.fn().mockReturnThis(),
+        } as any;
       });
+
 
       await expect(FeedbackService.getFeedbackForAgent('agent-123')).rejects.toThrow('Feedback fetch error');
     });
@@ -369,25 +318,22 @@ describe('FeedbackService', () => {
         { feedback_type: 'down' },
       ];
 
-      vi.mocked(supabase.from).mockImplementation((tableName) => {
+      vi.mocked(supabase.from).mockImplementation((tableName: string) => {
         if (tableName === 'chat_sessions') {
           return {
-            select: vi.fn(() => ({
-              eq: vi.fn(() => ({
-                then: vi.fn().mockResolvedValue({ data: mockSessions, error: null }),
-              })),
-            })),
-          } as any;
-        } else if (tableName === 'message_feedback') {
-          return {
-            select: vi.fn(() => ({
-              in: vi.fn(() => ({
-                then: vi.fn().mockResolvedValue({ data: mockFeedbackData, error: null }),
-              })),
-            })),
+            select: vi.fn().mockReturnThis(),
+            eq: vi.fn().mockResolvedValue({ data: mockSessions, error: null }),
           } as any;
         }
-        return {} as any;
+        if (tableName === 'message_feedback') {
+          return {
+            select: vi.fn().mockReturnThis(),
+            in: vi.fn().mockResolvedValue({ data: mockFeedbackData, error: null }),
+          } as any;
+        }
+        return {
+          select: vi.fn().mockReturnThis(),
+        } as any;
       });
 
       const stats = await FeedbackService.getFeedbackStats(mockAgentId);
@@ -400,18 +346,10 @@ describe('FeedbackService', () => {
     });
 
     it('should return zero stats if no sessions found', async () => {
-      vi.mocked(supabase.from).mockImplementation((tableName) => {
-        if (tableName === 'chat_sessions') {
-          return {
-            select: vi.fn(() => ({
-              eq: vi.fn(() => ({
-                then: vi.fn().mockResolvedValue({ data: [], error: null }),
-              })),
-            })),
-          } as any;
-        }
-        return {} as any;
-      });
+      vi.mocked(supabase.from).mockReturnValue({
+        select: vi.fn().mockReturnThis(),
+        eq: vi.fn().mockResolvedValue({ data: [], error: null }),
+      } as any);
 
       const stats = await FeedbackService.getFeedbackStats('agent-123');
       expect(stats).toEqual({
@@ -423,25 +361,22 @@ describe('FeedbackService', () => {
 
     it('should handle errors when fetching feedback stats', async () => {
       const mockError = new Error('Stats fetch error');
-      vi.mocked(supabase.from).mockImplementation((tableName) => {
+      vi.mocked(supabase.from).mockImplementation((tableName: string) => {
         if (tableName === 'chat_sessions') {
           return {
-            select: vi.fn(() => ({
-              eq: vi.fn(() => ({
-                then: vi.fn().mockResolvedValue({ data: [{ id: 's1' }], error: null }),
-              })),
-            })),
-          } as any;
-        } else if (tableName === 'message_feedback') {
-          return {
-            select: vi.fn(() => ({
-              in: vi.fn(() => ({
-                then: vi.fn().mockResolvedValue({ data: null, error: mockError }),
-              })),
-            })),
+            select: vi.fn().mockReturnThis(),
+            eq: vi.fn().mockResolvedValue({ data: [{ id: 's1' }], error: null }),
           } as any;
         }
-        return {} as any;
+        if (tableName === 'message_feedback') {
+          return {
+            select: vi.fn().mockReturnThis(),
+            in: vi.fn().mockResolvedValue({ data: null, error: mockError }),
+          } as any;
+        }
+        return {
+          select: vi.fn().mockReturnThis(),
+        } as any;
       });
 
       await expect(FeedbackService.getFeedbackStats('agent-123')).rejects.toThrow('Stats fetch error');

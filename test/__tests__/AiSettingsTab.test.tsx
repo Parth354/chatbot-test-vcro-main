@@ -1,17 +1,30 @@
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { vi } from 'vitest';
+import { expect, vi } from 'vitest';
 import { AiSettingsTab } from '@/components/agent-customize/AiSettingsTab';
 import { OpenAIService } from '@/services/openAIService';
 import { useToast } from '@/hooks/use-toast';
 
 // Mock OpenAIService
-vi.mock('@/services/openAIService', () => ({
-  OpenAIService: vi.fn(() => ({
-    listModels: vi.fn(),
-    listAssistants: vi.fn(),
-  })),
-}));
+export const mockListModels = vi.fn();
+export const mockListAssistants = vi.fn();
+
+vi.mock('@/services/openAIService', () => {
+  const mockListModels = vi.fn();
+  const mockListAssistants = vi.fn();
+
+  const MockOpenAIService = vi.fn(() => ({
+    listModels: mockListModels,
+    listAssistants: mockListAssistants,
+  }));
+
+  MockOpenAIService.prototype.listModels = mockListModels;
+  MockOpenAIService.prototype.listAssistants = mockListAssistants;
+
+  return {
+    OpenAIService: MockOpenAIService,
+  };
+});
 
 // Mock useToast
 vi.mock('@/hooks/use-toast', () => ({
@@ -52,8 +65,8 @@ describe('AiSettingsTab', () => {
     vi.mocked(useToast).mockReturnValue({ toast: mockToast });
     // Reset OpenAIService mock instance for each test
     vi.mocked(OpenAIService).mockClear();
-    vi.mocked(OpenAIService.prototype.listModels).mockResolvedValue([]);
-    vi.mocked(OpenAIService.prototype.listAssistants).mockResolvedValue([]);
+    mockListModels.mockResolvedValue([]);
+    mockListAssistants.mockResolvedValue([]);
   });
 
   it('should render correctly with default chat completion mode', () => {
@@ -99,6 +112,7 @@ describe('AiSettingsTab', () => {
   });
 
   it('should fetch models and assistants when API key is provided and button is clicked', async () => {
+    const mockApiKey = "test-api-key";
     const formDataWithKey = { ...defaultFormData, openai_api_key: mockApiKey };
     vi.mocked(OpenAIService.prototype.listModels).mockResolvedValueOnce([{ id: 'gpt-4', name: 'gpt-4' }]);
     vi.mocked(OpenAIService.prototype.listAssistants).mockResolvedValueOnce([{ id: 'asst_123', name: 'My Assistant' }]);
@@ -142,6 +156,7 @@ describe('AiSettingsTab', () => {
   });
 
   it('should show toast error if fetching resources fails', async () => {
+    const mockApiKey = "test-api-key";
     const formDataWithKey = { ...defaultFormData, openai_api_key: mockApiKey };
     vi.mocked(OpenAIService.prototype.listModels).mockRejectedValue(new Error('Network error'));
 
@@ -164,6 +179,7 @@ describe('AiSettingsTab', () => {
   });
 
   it('should display loading state when fetching resources', async () => {
+    const mockApiKey = "test-api-key";
     const formDataWithKey = { ...defaultFormData, openai_api_key: mockApiKey };
     vi.mocked(OpenAIService.prototype.listModels).mockReturnValue(new Promise(() => {})); // Keep pending
 
@@ -180,6 +196,7 @@ describe('AiSettingsTab', () => {
   });
 
   it('should call handleInputChange when AI Model is selected', async () => {
+    const mockApiKey = "test-api-key";
     const formDataWithKey = { ...defaultFormData, openai_api_key: mockApiKey };
     vi.mocked(OpenAIService.prototype.listModels).mockResolvedValueOnce([{ id: 'gpt-4', name: 'gpt-4' }]);
 
@@ -198,10 +215,11 @@ describe('AiSettingsTab', () => {
     await userEvent.click(screen.getByLabelText('AI Model'));
     await userEvent.click(screen.getByText('gpt-4'));
 
-    expect(mockHandleInputChange).toHaveBeenCalledWith('ai_model_config', { model_name: 'gpt-4' });
+    expect(mockHandleInputChange).toHaveBeenCalledWith('ai_model_config', { ...defaultFormData.ai_model_config, model_name: 'gpt-4' });
   });
 
   it('should call handleInputChange when OpenAI Assistant is selected', async () => {
+    const mockApiKey = "test-api-key";
     const formDataWithAssistantMode = { ...defaultFormData, ai_mode: 'assistant' as const, openai_api_key: mockApiKey };
     vi.mocked(OpenAIService.prototype.listAssistants).mockResolvedValueOnce([{ id: 'asst_123', name: 'My Assistant' }]);
 

@@ -1,7 +1,8 @@
 import { render, screen, waitFor, fireEvent } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { vi } from 'vitest';
-import { MemoryRouter, Routes, Route } from 'react-router-dom';
+import { expect, vi } from 'vitest';
+
+
 import AgentConversationHistory from '@/pages/AgentConversationHistory';
 import { ConversationService } from '@/services/conversationService';
 import { useToast } from '@/hooks/use-toast';
@@ -62,13 +63,7 @@ describe('AgentConversationHistory', () => {
   });
 
   const renderComponent = () => {
-    render(
-      <MemoryRouter initialEntries={[`/admin/agent/${agentId}/history`]}>
-        <Routes>
-          <Route path="/admin/agent/:agentId/history" element={<AgentConversationHistory />} />
-        </Routes>
-      </MemoryRouter>
-    );
+    render(<AgentConversationHistory agentId={agentId} />);
   };
 
   it('should render loading state initially', () => {

@@ -1,5 +1,5 @@
 import { render, screen, waitFor } from '@testing-library/react';
-import { vi } from 'vitest';
+import { expect, vi } from 'vitest';
 import { MemoryRouter, Routes, Route } from 'react-router-dom';
 import ChatbotPreviewPage from '@/pages/ChatbotPreviewPage';
 import { AgentService } from '@/services/agentService';
@@ -17,6 +17,17 @@ vi.mock('@/components/ChatbotUI', () => ({
   __esModule: true,
   default: vi.fn(() => <div data-testid="mock-chatbot-ui">Mock Chatbot UI</div>),
 }));
+
+// Mock react-router-dom explicitly
+vi.mock('react-router-dom', async (importOriginal) => {
+  const actual = await importOriginal();
+  return {
+    ...actual,
+    MemoryRouter: actual.MemoryRouter,
+    Routes: actual.Routes,
+    Route: actual.Route,
+  };
+});
 
 describe('ChatbotPreviewPage', () => {
   const mockAgentData = {

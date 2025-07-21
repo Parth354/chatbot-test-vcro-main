@@ -1,6 +1,6 @@
 import { render, screen, waitFor } from '@testing-library/react';
-import { vi } from 'vitest';
-import { MemoryRouter, Routes, Route } from 'react-router-dom';
+import { expect, vi } from 'vitest';
+import { MemoryRouter, Routes, Route, useParams, useLocation } from 'react-router-dom';
 import Embed from '@/pages/Embed';
 import { AgentService } from '@/services/agentService';
 import { useChatbotLogic } from '@/hooks/useChatbotLogic';
@@ -67,6 +67,19 @@ vi.mock('@/components/ChatbotUI', () => ({
   default: vi.fn(() => <div data-testid="mock-chatbot-ui">Mock Chatbot UI</div>),
 }));
 
+// Mock react-router-dom explicitly
+vi.mock('react-router-dom', async (importOriginal) => {
+  const actual = await importOriginal();
+  return {
+    ...actual,
+    MemoryRouter: actual.MemoryRouter,
+    Routes: actual.Routes,
+    Route: actual.Route,
+    useParams: vi.fn(),
+    useLocation: vi.fn(),
+  };
+});
+
 describe('Embed Page', () => {
   const mockAgentData = {
     id: 'agent-123',
@@ -95,9 +108,19 @@ describe('Embed Page', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     vi.mocked(AgentService.getAgent).mockResolvedValue(mockAgentData);
+    // Mock useParams and useLocation for each test
+    vi.mocked(useParams).mockReturnValue({ agentId: 'agent-123' });
+    vi.mocked(useLocation).mockReturnValue({ search: '' });
   });
 
   const renderEmbedPage = (agentId?: string) => {
+    // Conditionally mock useParams based on agentId presence
+    if (agentId === undefined) {
+      vi.mocked(useParams).mockReturnValue({});
+    } else {
+      vi.mocked(useParams).mockReturnValue({ agentId });
+    }
+
     const path = agentId ? `/embed/${agentId}` : '/embed/missing';
     render(
       <MemoryRouter initialEntries={[path]}>

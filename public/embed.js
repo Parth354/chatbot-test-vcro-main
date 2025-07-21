@@ -19,13 +19,14 @@
     container.id = "vcro-chatbot-widget"
     document.body.appendChild(container)
 
-    // Get base URL from script source
+    // Get script tag and bot ID
     const scriptTag = document.querySelector('script[src*="embed.js"]')
-    const baseUrl = scriptTag ? new URL(scriptTag.src).origin : window.location.origin
-    
-    // Get bot ID from data attribute
     const botId = scriptTag ? scriptTag.getAttribute('data-bot-id') : null
 
+    // Determine base URL
+    const appUrl = scriptTag ? scriptTag.getAttribute('data-app-url') : null
+    const baseUrl = appUrl || (scriptTag ? new URL(scriptTag.src).origin : window.location.origin)
+    
     // Create iframe
     const iframe = document.createElement("iframe")
     iframe.src = baseUrl + (botId ? `/embed/${botId}` : "/embed")

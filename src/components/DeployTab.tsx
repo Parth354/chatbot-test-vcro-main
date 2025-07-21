@@ -17,11 +17,11 @@ const DeployTab = ({ agentId }: DeployTabProps) => {
   const [iframeHeight, setIframeHeight] = useState("600")
   
   // Get chatbot base URL from environment variable or use current domain
-  const chatbotBaseUrl = import.meta.env.VITE_CHATBOT_URL || window.location.origin;
+  const chatbotBaseUrl = import.meta.env.VITE_APP_URL || window.location.origin;
   
   // URLs and code snippets
   const directLink = `${chatbotBaseUrl}/embed/${agentId}`
-  const scriptCode = `<script defer src="${chatbotBaseUrl}/embed.js" data-bot-id="${agentId}"></script>`
+  const scriptCode = `<script defer src="${chatbotBaseUrl}/embed.js" data-bot-id="${agentId}" data-app-url="${chatbotBaseUrl}"></script>`
   const iframeCode = `<iframe style="width: ${iframeWidth}px; height: ${iframeHeight}px;" src="${chatbotBaseUrl}/iframe/${agentId}"></iframe>`
 
   const copyToClipboard = async (text: string, label: string) => {

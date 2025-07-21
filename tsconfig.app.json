@@ -27,5 +27,5 @@
       "@widget/*": ["./widget/*"]
     }
   },
-  "include": ["src", "src/components/ChatbotUI.tsx", "widget"]
+  "include": ["src", "src/components/ChatbotUI.tsx", "widget", "test"]
 }

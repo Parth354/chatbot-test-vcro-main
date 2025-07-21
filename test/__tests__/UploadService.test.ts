@@ -17,9 +17,23 @@ vi.mock('@/integrations/supabase/client', () => ({
   },
 }));
 
+// Mock global URL object methods
+const mockCreateObjectURL = vi.fn();
+const mockRevokeObjectURL = vi.fn();
+
+Object.defineProperty(global, 'URL', {
+  value: {
+    createObjectURL: mockCreateObjectURL,
+    revokeObjectURL: mockRevokeObjectURL,
+  },
+  writable: true,
+});
+
 describe('UploadService', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mockCreateObjectURL.mockClear();
+    mockRevokeObjectURL.mockClear();
   });
 
   describe('validateFile', () => {
@@ -119,23 +133,23 @@ describe('UploadService', () => {
     it('should create a valid object URL', () => {
       const mockFile = new File([''], 'test.png', { type: 'image/png' });
       const mockUrl = 'blob:http://localhost/mock-uuid';
-      vi.spyOn(URL, 'createObjectURL').mockReturnValue(mockUrl);
+      mockCreateObjectURL.mockReturnValue(mockUrl);
 
       const result = uploadService.createPreviewUrl(mockFile);
 
       expect(result).toBe(mockUrl);
-      expect(URL.createObjectURL).toHaveBeenCalledWith(mockFile);
+      expect(mockCreateObjectURL).toHaveBeenCalledWith(mockFile);
     });
   });
 
   describe('revokePreviewUrl', () => {
     it('should revoke an object URL', () => {
       const mockUrl = 'blob:http://localhost/mock-uuid';
-      vi.spyOn(URL, 'revokeObjectURL').mockImplementation(() => {});
+      mockRevokeObjectURL.mockImplementation(() => {});
 
       uploadService.revokePreviewUrl(mockUrl);
 
-      expect(URL.revokeObjectURL).toHaveBeenCalledWith(mockUrl);
+      expect(mockRevokeObjectURL).toHaveBeenCalledWith(mockUrl);
     });
   });
 });

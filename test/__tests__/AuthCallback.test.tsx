@@ -1,6 +1,6 @@
 import { render, waitFor } from '@testing-library/react';
-import { vi } from 'vitest';
-import { MemoryRouter, Routes, Route } from 'react-router-dom';
+import { expect, vi } from 'vitest';
+import { MemoryRouter, Routes, Route, useNavigate, useLocation } from 'react-router-dom';
 import AuthCallback from '@/pages/AuthCallback';
 import { supabase } from '@/integrations/supabase/client';
 
@@ -13,6 +13,9 @@ vi.mock('react-router-dom', async (importOriginal) => {
     ...actual,
     useNavigate: () => mockUseNavigate,
     useLocation: () => mockUseLocation(),
+    MemoryRouter: actual.MemoryRouter,
+    Routes: actual.Routes,
+    Route: actual.Route,
   };
 });
 

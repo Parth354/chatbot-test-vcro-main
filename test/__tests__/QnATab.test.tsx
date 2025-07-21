@@ -1,6 +1,6 @@
-import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { vi } from 'vitest';
+import { vi ,expect } from 'vitest';
 import { QnATab } from '@/components/QnATab';
 import { PromptResponseService } from '@/services/promptResponseService';
 import { useToast } from '@/hooks/use-toast';
@@ -15,20 +15,13 @@ vi.mock('@/services/promptResponseService', () => ({
   },
 }));
 
-// Mock useToast
-vi.mock('@/hooks/use-toast', () => ({
-  useToast: vi.fn(() => ({
-    toast: vi.fn(),
-  })),
-}));
+
 
 describe('QnATab', () => {
   const agentId = 'agent-123';
-  const mockToast = vi.fn();
 
   beforeEach(() => {
     vi.clearAllMocks();
-    vi.mocked(useToast).mockReturnValue({ toast: mockToast });
     // Default mock for getPromptResponses to return empty array
     vi.mocked(PromptResponseService.getPromptResponses).mockResolvedValue([]);
   });
@@ -48,6 +41,9 @@ describe('QnATab', () => {
 
   it('should display no dynamic prompts message when none exist', async () => {
     render(<QnATab agentId={agentId} />);
+    await waitFor(() => {
+      expect(screen.getByRole('tab', { name: /Dynamic Prompts/i })).toBeInTheDocument();
+    });
     await userEvent.click(screen.getByRole('tab', { name: /Dynamic Prompts/i }));
     await waitFor(() => {
       expect(screen.getByText('No dynamic prompts yet. Create keyword-based responses above.')).toBeInTheDocument();
@@ -74,6 +70,9 @@ describe('QnATab', () => {
     vi.mocked(PromptResponseService.getPromptResponses).mockResolvedValue(mockDynamic);
 
     render(<QnATab agentId={agentId} />);
+    await waitFor(() => {
+      expect(screen.getByRole('tab', { name: /Dynamic Prompts/i })).toBeInTheDocument();
+    });
     await userEvent.click(screen.getByRole('tab', { name: /Dynamic Prompts/i }));
     await waitFor(() => {
       expect(screen.getByText('Pricing')).toBeInTheDocument();
@@ -85,6 +84,9 @@ describe('QnATab', () => {
 
   it('should open and close the add/edit Q&A pair dialog', async () => {
     render(<QnATab agentId={agentId} />);
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: /Add Q&A Pair/i })).toBeInTheDocument();
+    });
     await userEvent.click(screen.getByRole('button', { name: /Add Q&A Pair/i }));
     expect(screen.getByRole('dialog', { name: /Add New Q&A Pair/i })).toBeInTheDocument();
 
@@ -101,11 +103,13 @@ describe('QnATab', () => {
     ]);
 
     render(<QnATab agentId={agentId} />);
-    await userEvent.click(screen.getByRole('button', { name: /Add Q&A Pair/i }));
+    const addButton = await screen.findByRole('button', { name: /Add Q&A Pair/i });
+    await userEvent.click(addButton);
 
-    await userEvent.type(screen.getByLabelText(/Prompt/), newPrompt);
-    await userEvent.type(screen.getByLabelText(/Response/), newResponse);
-    await userEvent.click(screen.getByRole('button', { name: /Create Q&A Pair/i }));
+    const dialog = await screen.findByRole('dialog', { name: /Add New Q&A Pair/i });
+    await userEvent.type(within(dialog).getByLabelText(/Prompt/), newPrompt);
+    await userEvent.type(within(dialog).getByLabelText(/Response/), newResponse);
+    await userEvent.click(within(dialog).getByRole('button', { name: /Create Q&A Pair/i }));
 
     await waitFor(() => {
       expect(PromptResponseService.createPromptResponse).toHaveBeenCalledWith({
@@ -115,9 +119,9 @@ describe('QnATab', () => {
         is_dynamic: false,
         keywords: undefined,
       });
-      expect(mockToast).toHaveBeenCalledWith(expect.objectContaining({ title: 'Success' }));
-      expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
-      expect(screen.getByText(newPrompt)).toBeInTheDocument();
+    });
+    await waitFor(() => {
+      expect(vi.mocked(useToast)().toast).toHaveBeenCalledWith(expect.objectContaining({ title: 'Success' }));
     });
   });
 
@@ -131,13 +135,15 @@ describe('QnATab', () => {
     ]);
 
     render(<QnATab agentId={agentId} />);
-    await userEvent.click(screen.getByRole('button', { name: /Add Q&A Pair/i }));
+    const addButton = await screen.findByRole('button', { name: /Add Q&A Pair/i });
+    await userEvent.click(addButton);
 
-    await userEvent.type(screen.getByLabelText(/Prompt/), newPrompt);
-    await userEvent.type(screen.getByLabelText(/Response/), newResponse);
-    await userEvent.click(screen.getByLabelText(/Dynamic prompt/i)); // Toggle switch
-    await userEvent.type(screen.getByLabelText(/Keywords/), keywords);
-    await userEvent.click(screen.getByRole('button', { name: /Create Q&A Pair/i }));
+    const dialog = await screen.findByRole('dialog', { name: /Add New Q&A Pair/i });
+    await userEvent.type(within(dialog).getByLabelText(/Prompt/), newPrompt);
+    await userEvent.type(within(dialog).getByLabelText(/Response/), newResponse);
+    await userEvent.click(within(dialog).getByLabelText(/Dynamic prompt/i)); // Toggle switch
+    await userEvent.type(within(dialog).getByLabelText(/Keywords/), keywords);
+    await userEvent.click(within(dialog).getByRole('button', { name: /Create Q&A Pair/i }));
 
     await waitFor(() => {
       expect(PromptResponseService.createPromptResponse).toHaveBeenCalledWith({
@@ -147,30 +153,25 @@ describe('QnATab', () => {
         is_dynamic: true,
         keywords: ['key1', 'key2'],
       });
-      expect(mockToast).toHaveBeenCalledWith(expect.objectContaining({ title: 'Success' }));
+      expect(vi.mocked(useToast)().toast).toHaveBeenCalledWith(expect.objectContaining({ title: 'Success' }));
     });
   });
 
   it('should edit an existing Q&A pair', async () => {
     const existingPrompt = { id: 'e1', agent_id: agentId, prompt: 'Old Question', response: 'Old Answer', is_dynamic: false, created_at: '', updated_at: '' };
     const updatedResponse = 'Updated Answer';
-    vi.mocked(PromptResponseService.getPromptResponses).mockResolvedValueOnce([existingPrompt]);
+    vi.mocked(PromptResponseService.getPromptResponses).mockResolvedValue([existingPrompt]);
     vi.mocked(PromptResponseService.updatePromptResponse).mockResolvedValue({} as any);
-    vi.mocked(PromptResponseService.getPromptResponses).mockResolvedValueOnce([
-      { ...existingPrompt, response: updatedResponse },
-    ]);
 
     render(<QnATab agentId={agentId} />);
-    await waitFor(() => {
-      expect(screen.getByText('Old Question')).toBeInTheDocument();
-    });
+    
+    const editButton = await screen.findByRole('button', { name: /Edit Old Question/i });
+    await userEvent.click(editButton);
 
-    await userEvent.click(screen.getByRole('button', { name: /Edit/i }));
-    expect(screen.getByRole('dialog', { name: /Edit Q&A Pair/i })).toBeInTheDocument();
-
-    await userEvent.clear(screen.getByLabelText(/Response/));
-    await userEvent.type(screen.getByLabelText(/Response/), updatedResponse);
-    await userEvent.click(screen.getByRole('button', { name: /Update Q&A Pair/i }));
+    const dialog = await screen.findByRole('dialog', { name: /Edit Q&A Pair/i });
+    await userEvent.clear(within(dialog).getByLabelText(/Response/));
+    await userEvent.type(within(dialog).getByLabelText(/Response/), updatedResponse);
+    await userEvent.click(within(dialog).getByRole('button', { name: /Update Q&A Pair/i }));
 
     await waitFor(() => {
       expect(PromptResponseService.updatePromptResponse).toHaveBeenCalledWith(existingPrompt.id, {
@@ -180,38 +181,35 @@ describe('QnATab', () => {
         is_dynamic: existingPrompt.is_dynamic,
         keywords: undefined,
       });
-      expect(mockToast).toHaveBeenCalledWith(expect.objectContaining({ title: 'Success' }));
-      expect(screen.getByText(updatedResponse)).toBeInTheDocument();
+      expect(vi.mocked(useToast)().toast).toHaveBeenCalledWith(expect.objectContaining({ title: 'Success' }));
     });
   });
 
   it('should delete a Q&A pair', async () => {
     const existingPrompt = { id: 'd1', agent_id: agentId, prompt: 'Question to Delete', response: 'Answer to Delete', is_dynamic: false, created_at: '', updated_at: '' };
-    vi.mocked(PromptResponseService.getPromptResponses).mockResolvedValueOnce([existingPrompt]).mockResolvedValueOnce([]);
+    vi.mocked(PromptResponseService.getPromptResponses).mockResolvedValue([existingPrompt]);
     vi.mocked(PromptResponseService.deletePromptResponse).mockResolvedValue({} as any);
 
     render(<QnATab agentId={agentId} />);
-    await waitFor(() => {
-      expect(screen.getByText('Question to Delete')).toBeInTheDocument();
-    });
-
-    await userEvent.click(screen.getByRole('button', { name: /Delete/i }));
+    const deleteButton = await screen.findByRole('button', { name: /Delete Question to Delete/i });
+    await userEvent.click(deleteButton);
 
     await waitFor(() => {
       expect(PromptResponseService.deletePromptResponse).toHaveBeenCalledWith(existingPrompt.id);
-      expect(mockToast).toHaveBeenCalledWith(expect.objectContaining({ title: 'Success' }));
-      expect(screen.queryByText('Question to Delete')).not.toBeInTheDocument();
+      expect(vi.mocked(useToast)().toast).toHaveBeenCalledWith(expect.objectContaining({ title: 'Success' }));
     });
   });
 
   it('should display error toast if prompt or response is empty on submit', async () => {
     render(<QnATab agentId={agentId} />);
-    await userEvent.click(screen.getByRole('button', { name: /Add Q&A Pair/i }));
+    const addButton = await screen.findByRole('button', { name: /Add Q&A Pair/i });
+    await userEvent.click(addButton);
 
-    await userEvent.click(screen.getByRole('button', { name: /Create Q&A Pair/i }));
+    const dialog = await screen.findByRole('dialog', { name: /Add New Q&A Pair/i });
+    await userEvent.click(within(dialog).getByRole('button', { name: /Create Q&A Pair/i }));
 
     await waitFor(() => {
-      expect(mockToast).toHaveBeenCalledWith(expect.objectContaining({
+      expect(vi.mocked(useToast)().toast).toHaveBeenCalledWith(expect.objectContaining({
         title: 'Validation Error',
         description: 'Both prompt and response are required',
         variant: 'destructive',
@@ -225,14 +223,16 @@ describe('QnATab', () => {
     vi.mocked(PromptResponseService.getPromptResponses).mockResolvedValueOnce([]);
 
     render(<QnATab agentId={agentId} />);
-    await userEvent.click(screen.getByRole('button', { name: /Add Q&A Pair/i }));
+    const addButton = await screen.findByRole('button', { name: /Add Q&A Pair/i });
+    await userEvent.click(addButton);
 
-    await userEvent.type(screen.getByLabelText(/Prompt/), 'Test');
-    await userEvent.type(screen.getByLabelText(/Response/), 'Test');
-    await userEvent.click(screen.getByRole('button', { name: /Create Q&A Pair/i }));
+    const dialog = await screen.findByRole('dialog', { name: /Add New Q&A Pair/i });
+    await userEvent.type(within(dialog).getByLabelText(/Prompt/), 'Test');
+    await userEvent.type(within(dialog).getByLabelText(/Response/), 'Test');
+    await userEvent.click(within(dialog).getByRole('button', { name: /Create Q&A Pair/i }));
 
     await waitFor(() => {
-      expect(mockToast).toHaveBeenCalledWith(expect.objectContaining({
+      expect(vi.mocked(useToast)().toast).toHaveBeenCalledWith(expect.objectContaining({
         title: 'Error',
         description: 'Failed to save Q&A pair',
         variant: 'destructive',

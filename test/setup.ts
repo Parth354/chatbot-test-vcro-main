@@ -1,5 +1,13 @@
 import '@testing-library/jest-dom'
-import { vi } from 'vitest'
+import { expect, vi } from 'vitest';
+
+// Mock ResizeObserver
+const ResizeObserverMock = vi.fn(() => ({
+  observe: vi.fn(),
+  unobserve: vi.fn(),
+  disconnect: vi.fn(),
+}));
+vi.stubGlobal('ResizeObserver', ResizeObserverMock);
 
 // Mock Supabase client
 vi.mock('@/integrations/supabase/client', () => ({
@@ -69,8 +77,10 @@ vi.mock('@/hooks/useAuth', () => ({
 vi.mock('@/hooks/use-toast', () => ({
   useToast: vi.fn(() => ({
     toast: vi.fn(),
+    dismiss: vi.fn(),
+    toasts: [],
   })),
-}))
+}));
 
 // Mock useChatbotEffects hook
 vi.mock('@/hooks/useChatbotEffects', () => ({

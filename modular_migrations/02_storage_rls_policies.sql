@@ -1,4 +1,10 @@
--- Policies for storage.objects (avatars bucket)
+-- This file contains the RLS policies for the 'avatars' storage bucket.
+
+-- Drop old policies to ensure a clean slate
+DROP POLICY IF EXISTS "Authenticated users can upload avatars" ON storage.objects;
+DROP POLICY IF EXISTS "Users can view their own avatars" ON storage.objects;
+DROP POLICY IF EXISTS "Users can update their own avatars" ON storage.objects;
+DROP POLICY IF EXISTS "Users can delete their own avatars" ON storage.objects;
 
 -- Allow authenticated users to upload avatars to their own folder
 CREATE POLICY "Authenticated users can upload avatars"

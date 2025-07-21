@@ -1,11 +1,12 @@
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { vi } from 'vitest';
-import { MemoryRouter, Routes, Route } from 'react-router-dom';
+import { expect, vi } from 'vitest';
+import { MemoryRouter, Routes, Route, useNavigate } from 'react-router-dom';
 import AdminDashboard from '@/pages/AdminDashboard';
 import { AgentService } from '@/services/agentService';
 import { useAuth } from '@/hooks/useAuth';
 import ProtectedRoute from '@/components/ProtectedRoute';
+import { useToast } from '@/hooks/use-toast';
 
 // Mock AgentService
 vi.mock('@/services/agentService', () => ({
@@ -21,12 +22,16 @@ vi.mock('@/hooks/useAuth', () => ({
   useAuth: vi.fn(),
 }));
 
-// Mock useToast (since it's used in AdminDashboard)
-vi.mock('@/hooks/use-toast', () => ({
-  useToast: vi.fn(() => ({
-    toast: vi.fn(),
-  })),
-}));
+
+
+// Mock useNavigate explicitly
+vi.mock('react-router-dom', async (importOriginal) => {
+  const actual = await importOriginal();
+  return {
+    ...actual,
+    useNavigate: vi.fn(),
+  };
+});
 
 describe('AdminDashboard', () => {
   const mockNavigate = vi.fn();
@@ -50,6 +55,9 @@ describe('AdminDashboard', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+    // Mock useNavigate before rendering
+    vi.mocked(useNavigate).mockReturnValue(mockNavigate);
+
     // Default mock for useAuth: logged in admin
     vi.mocked(useAuth).mockReturnValue({
       user: mockAdminUser,
@@ -78,15 +86,6 @@ describe('AdminDashboard', () => {
       leadsRequiringAttention: 0,
       averageResponseTime: 'N/A',
       satisfactionRate: 'N/A',
-    });
-
-    // Mock useNavigate
-    vi.mock('react-router-dom', async (importOriginal) => {
-      const actual = await importOriginal();
-      return {
-        ...actual,
-        useNavigate: () => mockNavigate,
-      };
     });
   });
 
@@ -159,6 +158,9 @@ describe('AdminDashboard', () => {
 
   it('should navigate to create new agent page', async () => {
     renderAdminDashboard();
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: /Create New Agent/i })).toBeInTheDocument();
+    });
     await userEvent.click(screen.getByRole('button', { name: /Create New Agent/i }));
     expect(mockNavigate).toHaveBeenCalledWith('/admin/agent/new/customize');
   });
@@ -197,6 +199,9 @@ describe('AdminDashboard', () => {
 
   it('should call signOut when Sign Out button is clicked', async () => {
     renderAdminDashboard();
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: /Sign Out/i })).toBeInTheDocument();
+    });
     await userEvent.click(screen.getByRole('button', { name: /Sign Out/i }));
     expect(mockSignOut).toHaveBeenCalledTimes(1);
   });

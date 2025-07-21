@@ -1,6 +1,6 @@
 import { render, screen, waitFor } from '@testing-library/react';
-import { vi } from 'vitest';
-import { MemoryRouter, Routes, Route } from 'react-router-dom';
+import { expect, vi } from 'vitest';
+import { MemoryRouter, Routes, Route, useParams, useLocation } from 'react-router-dom';
 import Iframe from '@/pages/Iframe';
 import { AgentService } from '@/services/agentService';
 import ChatbotUI from '@/components/ChatbotUI';
@@ -17,6 +17,19 @@ vi.mock('@/components/ChatbotUI', () => ({
   __esModule: true,
   default: vi.fn(() => <div data-testid="mock-chatbot-ui">Mock Chatbot UI</div>),
 }));
+
+// Mock react-router-dom explicitly
+vi.mock('react-router-dom', async (importOriginal) => {
+  const actual = await importOriginal();
+  return {
+    ...actual,
+    MemoryRouter: actual.MemoryRouter,
+    Routes: actual.Routes,
+    Route: actual.Route,
+    useParams: vi.fn(),
+    useLocation: vi.fn(),
+  };
+});
 
 describe('Iframe Page', () => {
   const mockAgentData = {
@@ -46,9 +59,22 @@ describe('Iframe Page', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     vi.mocked(AgentService.getAgent).mockResolvedValue(mockAgentData);
+    // Mock useParams and useLocation for each test
+    vi.mocked(useParams).mockReturnValue({ agentId: 'agent-123' });
+    vi.mocked(useLocation).mockReturnValue({ search: '' });
   });
 
   const renderIframePage = (agentId?: string, searchParams?: string) => {
+    // Conditionally mock useParams based on agentId presence
+    if (agentId === undefined) {
+      vi.mocked(useParams).mockReturnValue({});
+    } else {
+      vi.mocked(useParams).mockReturnValue({ agentId });
+    }
+
+    // Mock useLocation to return the specified searchParams
+    vi.mocked(useLocation).mockReturnValue({ search: searchParams || '' });
+
     const path = agentId ? `/iframe/${agentId}` : '/iframe/missing';
     render(
       <MemoryRouter initialEntries={[`${path}${searchParams || ''}`]}>
@@ -116,7 +142,7 @@ describe('Iframe Page', () => {
         expect.objectContaining({
           chatbotData: mockAgentData,
           previewMode: 'collapsed',
-          isLivePreview: false,
+          isLivePreview: false, // Collapsed mode implies not live preview
           loadingChatbotData: false,
         }),
         {}

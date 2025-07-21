@@ -55,6 +55,7 @@ const ChatbotUIContent: React.FC<ChatbotUIProps> = ({ chatbotData, previewMode, 
     linkedInPrompted,
     threadId,
     scrollContainerRef,
+    authLoading,
     handleBubbleClick,
     handleClose,
     getSmartSuggestions,
@@ -420,7 +421,7 @@ const ChatbotUIContent: React.FC<ChatbotUIProps> = ({ chatbotData, previewMode, 
                 </div>
               </div>
               <div className="flex items-center gap-2">
-                {!isLoggedIn && (
+                {!isLoggedIn && !authLoading && (
                   <Button
                     onClick={handleLoginClick}
                     variant="ghost"
@@ -509,11 +510,13 @@ const ChatbotUIContent: React.FC<ChatbotUIProps> = ({ chatbotData, previewMode, 
       )}
 
       {/* Login Modal */}
-      <ChatbotLoginModal
-        isOpen={showLoginModal}
-        onClose={handleLoginClick}
-        onSuccess={handleLoginSuccess}
-      />
+      {!authLoading && (
+        <ChatbotLoginModal
+          isOpen={showLoginModal}
+          onClose={handleLoginClick}
+          onSuccess={handleLoginSuccess}
+        />
+      )}
     </>
   );
 };

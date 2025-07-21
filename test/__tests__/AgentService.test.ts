@@ -6,41 +6,45 @@ import { ConversationService } from '@/services/conversationService';
 import { FeedbackService } from '@/services/feedbackService';
 
 // Mock external dependencies
-vi.mock('@/integrations/supabase/client', () => ({
-  supabase: {
-    from: vi.fn(() => ({
-      select: vi.fn(() => ({
-        eq: vi.fn(() => ({
-          single: vi.fn(),
-          order: vi.fn(() => ({
-            then: vi.fn(),
-          })),
-        })),
-        order: vi.fn(() => ({
-          then: vi.fn(),
-        })),
-        insert: vi.fn(() => ({
-          select: vi.fn(() => ({
-            single: vi.fn(),
-          })),
-        })),
-        update: vi.fn(() => ({
-          eq: vi.fn(() => ({
-            select: vi.fn(() => ({
-              single: vi.fn(),
-            })),
-          })),
-        })),
-        delete: vi.fn(() => ({
-          eq: vi.fn(),
-        })),
-      })),
-    })),
-    auth: {
-      getUser: vi.fn(),
+vi.mock('@/integrations/supabase/client', () => {
+  const mockChainable = () => {
+    const obj: any = {};
+    obj.eq = vi.fn(() => obj);
+    obj.in = vi.fn(() => obj);
+    obj.order = vi.fn(() => obj);
+    obj.limit = vi.fn(() => obj);
+    obj.range = vi.fn(() => obj);
+    obj.single = vi.fn();
+    obj.maybeSingle = vi.fn();
+    obj.then = vi.fn(); // For direct promise resolution
+    obj.gte = vi.fn(() => obj); // Add gte
+    obj.lt = vi.fn(() => obj); // Add lt
+    obj.or = vi.fn(() => obj); // Add or
+    return obj;
+  };
+
+  const mockFrom = vi.fn((tableName) => {
+    const chain = mockChainable();
+    // Specific mocks for insert, update, delete which might not return chainable objects in the same way
+    chain.insert = vi.fn(() => ({ select: vi.fn(() => ({ single: vi.fn() })) }));
+    chain.update = vi.fn(() => ({ eq: vi.fn(() => ({ select: vi.fn(() => ({ single: vi.fn() })) })) }));
+    chain.delete = vi.fn(() => ({ eq: vi.fn(() => ({ then: vi.fn() })) }));
+
+    // Override select to return a chainable object
+    chain.select = vi.fn(() => mockChainable());
+
+    return chain;
+  });
+
+  return {
+    supabase: {
+      from: mockFrom,
+      auth: {
+        getUser: vi.fn(),
+      },
     },
-  },
-}));
+  };
+});
 
 vi.mock('@/services/conversationService', () => ({
   ConversationService: {
@@ -57,6 +61,17 @@ vi.mock('@/services/feedbackService', () => ({
 describe('AgentService', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    // Reset supabase.from mock for each test
+    vi.mocked(supabase.from).mockClear();
+    vi.mocked(supabase.auth.getUser).mockClear();
+
+    // Default mock for supabase.auth.getUser
+    vi.mocked(supabase.auth.getUser).mockResolvedValue({ data: { user: null }, error: null });
+
+    // Default mock for supabase.from().select().eq().single()
+    vi.mocked(supabase.from('agents').select().eq().single).mockResolvedValue({ data: null, error: { code: 'PGRST116' } });
+    vi.mocked(supabase.from('profiles').select().eq().single).mockResolvedValue({ data: null, error: { code: 'PGRST116' } });
+    vi.mocked(supabase.from('user_performance').select().eq().order().limit().single).mockResolvedValue({ data: null, error: { code: 'PGRST116' } });
   });
 
   describe('CRUD Operations', () => {
@@ -95,16 +110,10 @@ describe('AgentService', () => {
         error: null
       });
 
-      vi.mocked(supabase.from).mockReturnValue({
-        insert: vi.fn().mockReturnValue({
-          select: vi.fn().mockReturnValue({
-            single: vi.fn().mockResolvedValue({
-              data: mockAgent,
-              error: null
-            })
-          })
-        })
-      } as any);
+      vi.mocked(supabase.from('agents').insert().select().single).mockResolvedValue({
+        data: mockAgent,
+        error: null
+      });
 
       const agentData: CreateAgentData = {
         name: 'Test Agent',
@@ -137,21 +146,15 @@ describe('AgentService', () => {
       const mockAgent = {
         id: 'agent-123',
         name: 'Test Agent',
-        colors: JSON.stringify({ primary: '#3B82F6' }),
-        cta_buttons: JSON.stringify([]),
-        lead_form_fields: JSON.stringify([]),
+        colors: '{"primary": "#3B82F6"}',
+        cta_buttons: '[]',
+        lead_form_fields: '[]',
       };
 
-      vi.mocked(supabase.from).mockReturnValue({
-        select: vi.fn().mockReturnValue({
-          eq: vi.fn().mockReturnValue({
-            single: vi.fn().mockResolvedValue({
-              data: mockAgent,
-              error: null
-            })
-          })
-        })
-      } as any);
+      vi.mocked(supabase.from('agents').select().eq().single).mockResolvedValue({
+        data: mockAgent,
+        error: null
+      });
 
       const result = await AgentService.getAgent('agent-123');
       expect(result?.name).toBe('Test Agent');
@@ -162,23 +165,15 @@ describe('AgentService', () => {
       const mockAgent = {
         id: 'agent-123',
         name: 'Updated Agent',
-        colors: JSON.stringify({ primary: '#3B82F6' }),
-        cta_buttons: JSON.stringify([]),
-        lead_form_fields: JSON.stringify([]),
+        colors: '{"primary": "#3B82F6"}',
+        cta_buttons: '[]',
+        lead_form_fields: '[]',
       };
 
-      vi.mocked(supabase.from).mockReturnValue({
-        update: vi.fn().mockReturnValue({
-          eq: vi.fn().mockReturnValue({
-            select: vi.fn().mockReturnValue({
-              single: vi.fn().mockResolvedValue({
-                data: mockAgent,
-                error: null
-              })
-            })
-          })
-        })
-      } as any);
+      vi.mocked(supabase.from('agents').update().eq().select().single).mockResolvedValue({
+        data: mockAgent,
+        error: null
+      });
 
       const updateData: UpdateAgentData = {
         name: 'Updated Agent'
@@ -189,11 +184,7 @@ describe('AgentService', () => {
     });
 
     it('should delete agent', async () => {
-      vi.mocked(supabase.from).mockReturnValue({
-        delete: vi.fn().mockReturnValue({
-          eq: vi.fn().mockResolvedValue({ error: null })
-        })
-      } as any);
+      vi.mocked(supabase.from('agents').delete().eq).mockResolvedValue({ error: null });
 
       await expect(AgentService.deleteAgent('agent-123')).resolves.not.toThrow();
     });
@@ -208,16 +199,10 @@ describe('AgentService', () => {
         cta_buttons: '[{"label": "Test", "url": "https://test.com"}]'
       };
 
-      vi.mocked(supabase.from).mockReturnValue({
-        select: vi.fn().mockReturnValue({
-          eq: vi.fn().mockReturnValue({
-            single: vi.fn().mockResolvedValue({
-              data: mockAgent,
-              error: null
-            })
-          })
-        })
-      } as any);
+      vi.mocked(supabase.from('agents').select().eq().single).mockResolvedValue({
+        data: mockAgent,
+        error: null
+      });
 
       const result = await AgentService.getAgent('agent-123');
       expect(result?.colors).toEqual({ primary: "#3B82F6", bubble: "#F3F4F6" });
@@ -227,32 +212,20 @@ describe('AgentService', () => {
 
   describe('Error Handling', () => {
     it('should handle agent not found', async () => {
-      vi.mocked(supabase.from).mockReturnValue({
-        select: vi.fn().mockReturnValue({
-          eq: vi.fn().mockReturnValue({
-            single: vi.fn().mockResolvedValue({
-              data: null,
-              error: { code: 'PGRST116', message: 'No rows found' }
-            })
-          })
-        })
-      } as any);
+      vi.mocked(supabase.from('agents').select().eq().single).mockResolvedValue({
+        data: null,
+        error: { code: 'PGRST116', message: 'No rows found' }
+      });
 
       const result = await AgentService.getAgent('nonexistent');
       expect(result).toBeNull();
     });
 
     it('should throw error for database failures', async () => {
-      vi.mocked(supabase.from).mockReturnValue({
-        select: vi.fn().mockReturnValue({
-          eq: vi.fn().mockReturnValue({
-            single: vi.fn().mockResolvedValue({
-              data: null,
-              error: { code: 'DB_ERROR', message: 'Database error' }
-            })
-          })
-        })
-      } as any);
+      vi.mocked(supabase.from('agents').select().eq().single).mockResolvedValue({
+        data: null,
+        error: { code: 'DB_ERROR', message: 'Database error' }
+      });
 
       await expect(AgentService.getAgent('agent-123')).rejects.toThrow('Failed to fetch agent: Database error');
     });
@@ -266,29 +239,24 @@ describe('AgentService', () => {
         { id: 'agent-2', name: 'Agent 2', user_id: mockUserId, colors: '{}', cta_buttons: '[]', lead_form_fields: '[]' },
       ];
 
-      vi.mocked(supabase.from).mockReturnValue({
-        select: vi.fn().mockReturnValue({
-          eq: vi.fn().mockReturnThis(),
-          order: vi.fn().mockResolvedValue({ data: mockAgentsData, error: null }),
-        }),
-      } as any);
+      vi.mocked(supabase.from('agents').select().eq().order().then).mockResolvedValue({ data: mockAgentsData, error: null });
 
       vi.spyOn(AgentService, 'getAgentMetrics').mockResolvedValueOnce({
         totalSessions: 10,
         totalMessages: 100,
-        todayMessages: 10,
-        yesterdayMessages: 5,
-        leadsRequiringAttention: 2,
-        averageResponseTime: '< 1 min',
-        satisfactionRate: '80%',
-      }).mockResolvedValueOnce({
-        totalSessions: 5,
-        totalMessages: 50,
         todayMessages: 5,
         yesterdayMessages: 2,
         leadsRequiringAttention: 1,
         averageResponseTime: '< 1 min',
         satisfactionRate: '90%',
+      }).mockResolvedValueOnce({
+        totalSessions: 5,
+        totalMessages: 50,
+        todayMessages: 1,
+        yesterdayMessages: 0,
+        leadsRequiringAttention: 0,
+        averageResponseTime: '< 1 min',
+        satisfactionRate: '80%',
       });
 
       const result = await AgentService.getAgents(mockUserId);
@@ -303,12 +271,7 @@ describe('AgentService', () => {
 
     it('should handle errors when fetching agents', async () => {
       const mockError = new Error('Fetch agents error');
-      vi.mocked(supabase.from).mockReturnValue({
-        select: vi.fn().mockReturnValue({
-          eq: vi.fn().mockReturnThis(),
-          order: vi.fn().mockResolvedValue({ data: null, error: mockError }),
-        }),
-      } as any);
+      vi.mocked(supabase.from('agents').select().eq().order().then).mockResolvedValue({ data: null, error: mockError });
 
       await expect(AgentService.getAgents('user-123')).rejects.toThrow('Fetch agents error');
     });
@@ -323,43 +286,11 @@ describe('AgentService', () => {
       const mockYesterdayMessages = [{ id: 'm2' }];
       const mockLeads = [{ id: 'l1' }];
 
-      vi.mocked(supabase.from).mockImplementation((tableName) => {
-        if (tableName === 'chat_sessions') {
-          return {
-            select: vi.fn(() => ({
-              eq: vi.fn(() => ({
-                then: vi.fn().mockResolvedValue({ data: mockSessions, error: null }),
-              })),
-            })),
-          } as any;
-        } else if (tableName === 'chat_messages') {
-          return {
-            select: vi.fn((_select, options) => {
-              if (options?.count === 'exact') {
-                if (options?.gte && options.lt) {
-                  return { then: vi.fn().mockResolvedValue({ count: mockYesterdayMessages.length, error: null }) };
-                } else if (options?.gte) {
-                  return { then: vi.fn().mockResolvedValue({ count: mockTodayMessages.length, error: null }) };
-                } else {
-                  return { then: vi.fn().mockResolvedValue({ count: mockMessages.length, error: null }) };
-                }
-              }
-              return { then: vi.fn().mockResolvedValue({ data: [], error: null }) };
-            }),
-          } as any;
-        } else if (tableName === 'lead_submissions') {
-          return {
-            select: vi.fn(() => ({
-              eq: vi.fn(() => ({
-                eq: vi.fn(() => ({
-                  then: vi.fn().mockResolvedValue({ count: mockLeads.length, error: null }),
-                })),
-              })),
-            })),
-          } as any;
-        }
-        return {} as any;
-      });
+      vi.mocked(supabase.from('chat_sessions').select().eq().then).mockResolvedValue({ data: mockSessions, error: null });
+      vi.mocked(supabase.from('chat_messages').select().in().then).mockResolvedValue({ count: mockMessages.length, error: null });
+      vi.mocked(supabase.from('chat_messages').select().in().gte().then).mockResolvedValue({ count: mockTodayMessages.length, error: null });
+      vi.mocked(supabase.from('chat_messages').select().in().gte().lt().then).mockResolvedValue({ count: mockYesterdayMessages.length, error: null });
+      vi.mocked(supabase.from('lead_submissions').select().eq().eq().then).mockResolvedValue({ count: mockLeads.length, error: null });
 
       vi.mocked(FeedbackService.getFeedbackStats).mockResolvedValue({
         positive: 8,
@@ -378,13 +309,7 @@ describe('AgentService', () => {
     });
 
     it('should return zeroed metrics if no sessions exist', async () => {
-      vi.mocked(supabase.from).mockReturnValue({
-        select: vi.fn(() => ({
-          eq: vi.fn(() => ({
-            then: vi.fn().mockResolvedValue({ data: [], error: null }),
-          })),
-        })),
-      } as any);
+      vi.mocked(supabase.from('chat_sessions').select().eq().then).mockResolvedValue({ data: [], error: null });
 
       const metrics = await AgentService.getAgentMetrics('agent-123');
 
@@ -401,13 +326,7 @@ describe('AgentService', () => {
 
     it('should handle errors during metric fetching', async () => {
       const mockError = new Error('Metrics fetch error');
-      vi.mocked(supabase.from).mockReturnValue({
-        select: vi.fn(() => ({
-          eq: vi.fn(() => ({
-            then: vi.fn().mockResolvedValue({ data: null, error: mockError }),
-          })),
-        })),
-      } as any);
+      vi.mocked(supabase.from('chat_sessions').select().eq().then).mockResolvedValue({ data: null, error: mockError });
 
       await expect(AgentService.getAgentMetrics('agent-123')).rejects.toThrow('Metrics fetch error');
     });
@@ -415,39 +334,11 @@ describe('AgentService', () => {
 
   describe('getAdminMetrics', () => {
     it('should return correct overall admin metrics', async () => {
-      vi.mocked(supabase.from).mockImplementation((tableName) => {
-        if (tableName === 'chat_sessions') {
-          return {
-            select: vi.fn((_select, options) => {
-              if (options?.count === 'exact') {
-                return { then: vi.fn().mockResolvedValue({ count: 50, error: null }) };
-              }
-              return { then: vi.fn().mockResolvedValue({ data: [{ session_id: 's1' }, { session_id: 's2' }], error: null }) };
-            }),
-          } as any;
-        } else if (tableName === 'chat_messages') {
-          return {
-            select: vi.fn((_select, options) => {
-              if (options?.count === 'exact') {
-                if (options?.gte) {
-                  return { then: vi.fn().mockResolvedValue({ count: 10, error: null }) }; // todayMessagesCount
-                }
-                return { then: vi.fn().mockResolvedValue({ count: 500, error: null }) }; // totalMessagesCount
-              }
-              return { then: vi.fn().mockResolvedValue({ data: [], error: null }) };
-            }),
-          } as any;
-        } else if (tableName === 'lead_submissions') {
-          return {
-            select: vi.fn(() => ({
-              eq: vi.fn(() => ({
-                then: vi.fn().mockResolvedValue({ count: 3, error: null }),
-              })),
-            })),
-          } as any;
-        }
-        return {} as any;
-      });
+      vi.mocked(supabase.from('chat_sessions').select().then).mockResolvedValue({ count: 50, error: null });
+      vi.mocked(supabase.from('chat_messages').select().then).mockResolvedValue({ count: 500, error: null });
+      vi.mocked(supabase.from('chat_messages').select().gte().then).mockResolvedValue({ count: 10, error: null });
+      vi.mocked(supabase.from('lead_submissions').select().eq().then).mockResolvedValue({ count: 3, error: null });
+      vi.mocked(supabase.from('chat_messages').select().not().then).mockResolvedValue({ data: [{ session_id: 's1' }, { session_id: 's2' }], error: null });
 
       const metrics = await AgentService.getAdminMetrics();
 
@@ -460,11 +351,7 @@ describe('AgentService', () => {
 
     it('should handle errors when fetching admin metrics', async () => {
       const mockError = new Error('Admin metrics fetch error');
-      vi.mocked(supabase.from).mockReturnValue({
-        select: vi.fn(() => ({
-          then: vi.fn().mockResolvedValue({ data: null, error: mockError }),
-        })),
-      } as any);
+      vi.mocked(supabase.from('chat_sessions').select().then).mockResolvedValue({ data: null, error: mockError });
 
       await expect(AgentService.getAdminMetrics()).rejects.toThrow('Admin metrics fetch error');
     });
@@ -475,33 +362,23 @@ describe('AgentService', () => {
       const mockUserId = 'user-123';
       const mockPersonaData = { some: 'data' };
 
-      vi.mocked(supabase.from).mockReturnValue({
-        select: vi.fn().mockReturnValue({
-          eq: vi.fn().mockReturnThis(),
-          order: vi.fn().mockReturnThis(),
-          limit: vi.fn().mockReturnValue({
-            single: vi.fn().mockResolvedValue({ data: { enriched_data: mockPersonaData }, error: null }),
-          }),
-        }),
-      } as any);
+      vi.mocked(supabase.from('user_performance').select().eq().order().limit().single).mockResolvedValue({
+        data: { enriched_data: mockPersonaData },
+        error: null,
+      });
 
       const result = await AgentService.getUserPerformanceData(mockUserId);
 
       expect(result).toEqual(mockPersonaData);
       expect(supabase.from).toHaveBeenCalledWith('user_performance');
-      expect(supabase.from('user_performance').select().eq).toHaveBeenCalledWith('user_id', mockUserId);
+      expect(vi.mocked(supabase.from('user_performance').select().eq).mock.calls[0][0]).toBe('user_id');
     });
 
     it('should return null if no persona data found', async () => {
-      vi.mocked(supabase.from).mockReturnValue({
-        select: vi.fn().mockReturnValue({
-          eq: vi.fn().mockReturnThis(),
-          order: vi.fn().mockReturnThis(),
-          limit: vi.fn().mockReturnValue({
-            single: vi.fn().mockResolvedValue({ data: null, error: { code: 'PGRST116' } }),
-          }),
-        }),
-      } as any);
+      vi.mocked(supabase.from('user_performance').select().eq().order().limit().single).mockResolvedValue({
+        data: null,
+        error: { code: 'PGRST116' },
+      });
 
       const result = await AgentService.getUserPerformanceData('user-123');
       expect(result).toBeNull();
@@ -509,15 +386,10 @@ describe('AgentService', () => {
 
     it('should handle errors when fetching persona data', async () => {
       const mockError = new Error('Persona fetch error');
-      vi.mocked(supabase.from).mockReturnValue({
-        select: vi.fn().mockReturnValue({
-          eq: vi.fn().mockReturnThis(),
-          order: vi.fn().mockReturnThis(),
-          limit: vi.fn().mockReturnValue({
-            single: vi.fn().mockResolvedValue({ data: null, error: mockError }),
-          }),
-        }),
-      } as any);
+      vi.mocked(supabase.from('user_performance').select().eq().order().limit().single).mockResolvedValue({
+        data: null,
+        error: mockError,
+      });
 
       await expect(AgentService.getUserPerformanceData('user-123')).rejects.toThrow('Persona fetch error');
     });
@@ -529,48 +401,29 @@ describe('AgentService', () => {
       const mockUserId = 'user-123';
       const mockPersonaData = { some: 'data' };
 
-      vi.mocked(supabase.from).mockImplementation((tableName) => {
-        if (tableName === 'profiles') {
-          return {
-            select: vi.fn(() => ({
-              eq: vi.fn(() => ({
-                single: vi.fn().mockResolvedValue({ data: { user_id: mockUserId }, error: null }),
-              })),
-            })),
-          } as any;
-        } else if (tableName === 'user_performance') {
-          return {
-            select: vi.fn(() => ({
-              eq: vi.fn(() => ({
-                order: vi.fn(() => ({
-                  limit: vi.fn(() => ({
-                    single: vi.fn().mockResolvedValue({ data: { enriched_data: mockPersonaData }, error: null }),
-                  })),
-                })),
-              })),
-            })),
-          } as any;
-        }
-        return {} as any;
+      vi.mocked(supabase.from('profiles').select().eq().single).mockResolvedValue({
+        data: { user_id: mockUserId },
+        error: null,
+      });
+      vi.mocked(supabase.from('user_performance').select().eq().order().limit().single).mockResolvedValue({
+        data: { enriched_data: mockPersonaData },
+        error: null,
       });
 
       const result = await AgentService.getUserPerformanceDataByLinkedIn(mockLinkedInUrl);
 
       expect(result).toEqual(mockPersonaData);
       expect(supabase.from).toHaveBeenCalledWith('profiles');
-      expect(supabase.from('profiles').select().eq).toHaveBeenCalledWith('linkedin_profile_url', mockLinkedInUrl);
+      expect(vi.mocked(supabase.from('profiles').select().eq).mock.calls[0][0]).toBe('linkedin_profile_url');
       expect(supabase.from).toHaveBeenCalledWith('user_performance');
-      expect(supabase.from('user_performance').select().eq).toHaveBeenCalledWith('user_id', mockUserId);
+      expect(vi.mocked(supabase.from('user_performance').select().eq).mock.calls[0][0]).toBe('user_id');
     });
 
     it('should return null if no profile found for linkedin URL', async () => {
-      vi.mocked(supabase.from).mockReturnValue({
-        select: vi.fn(() => ({
-          eq: vi.fn(() => ({
-            single: vi.fn().mockResolvedValue({ data: null, error: { code: 'PGRST116' } }),
-          })),
-        })),
-      } as any);
+      vi.mocked(supabase.from('profiles').select().eq().single).mockResolvedValue({
+        data: null,
+        error: { code: 'PGRST116' },
+      });
 
       const result = await AgentService.getUserPerformanceDataByLinkedIn('https://linkedin.com/in/nonexistent');
       expect(result).toBeNull();
@@ -578,13 +431,10 @@ describe('AgentService', () => {
 
     it('should handle errors when fetching profile by linkedin URL', async () => {
       const mockError = new Error('Profile fetch error');
-      vi.mocked(supabase.from).mockReturnValue({
-        select: vi.fn(() => ({
-          eq: vi.fn(() => ({
-            single: vi.fn().mockResolvedValue({ data: null, error: mockError }),
-          })),
-        })),
-      } as any);
+      vi.mocked(supabase.from('profiles').select().eq().single).mockResolvedValue({
+        data: null,
+        error: mockError,
+      });
 
       await expect(AgentService.getUserPerformanceDataByLinkedIn('https://linkedin.com/in/test')).rejects.toThrow('Profile fetch error');
     });
@@ -594,29 +444,13 @@ describe('AgentService', () => {
       const mockUserId = 'user-123';
       const mockError = new Error('Persona fetch error');
 
-      vi.mocked(supabase.from).mockImplementation((tableName) => {
-        if (tableName === 'profiles') {
-          return {
-            select: vi.fn(() => ({
-              eq: vi.fn(() => ({
-                single: vi.fn().mockResolvedValue({ data: { user_id: mockUserId }, error: null }),
-              })),
-            })),
-          } as any;
-        } else if (tableName === 'user_performance') {
-          return {
-            select: vi.fn(() => ({
-              eq: vi.fn(() => ({
-                order: vi.fn(() => ({
-                  limit: vi.fn(() => ({
-                    single: vi.fn().mockResolvedValue({ data: null, error: mockError }),
-                  })),
-                })),
-              })),
-            })),
-          } as any;
-        }
-        return {} as any;
+      vi.mocked(supabase.from('profiles').select().eq().single).mockResolvedValue({
+        data: { user_id: mockUserId },
+        error: null,
+      });
+      vi.mocked(supabase.from('user_performance').select().eq().order().limit().single).mockResolvedValue({
+        data: null,
+        error: mockError,
       });
 
       await expect(AgentService.getUserPerformanceDataByLinkedIn(mockLinkedInUrl)).rejects.toThrow('Persona fetch error');
