@@ -67,10 +67,29 @@ export const AuthProvider = ({ children, navigate }: { children: React.ReactNode
       let profile: Profile | null = null;
 
       if (data) {
-        const roleValue = data.role as string;
+        const isAdminLogin = session.user.app_metadata?.provider === 'google' && session.user.app_metadata?.redirectTo?.includes('admin=true');
+        let role = data.role;
+
+        // If it's an admin login and the user is currently just a 'user', upgrade them.
+        if (isAdminLogin && role === 'user') {
+          const { data: updatedProfile, error: updateError } = await supabase
+            .from('profiles')
+            .update({ role: 'admin' })
+            .eq('user_id', session.user.id)
+            .select()
+            .single();
+
+          if (updateError) {
+            console.error("Error upgrading user role to admin:", updateError);
+            // Proceed with the old role if update fails
+          } else {
+            role = updatedProfile.role; // Update role with the newly assigned one
+          }
+        }
+        
         const typedRole: 'user' | 'admin' | 'superadmin' | undefined =
-          (roleValue === 'user' || roleValue === 'admin' || roleValue === 'superadmin')
-            ? (roleValue as 'user' | 'admin' | 'superadmin')
+          (role === 'user' || role === 'admin' || role === 'superadmin')
+            ? (role as 'user' | 'admin' | 'superadmin')
             : undefined;
 
         profile = {

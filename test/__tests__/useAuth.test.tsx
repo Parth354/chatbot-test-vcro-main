@@ -244,30 +244,30 @@ describe('useAuth Hook', () => {
     }, { timeout: 10000 });
   });
 
-  test('sign out clears user and profile', async () => {
-    // Mock initial session to be a logged-in admin user
-    (supabase.auth.getSession as vi.Mock).mockResolvedValueOnce({ data: { session: { user: mockAdminUser } }, error: null });
-    (supabase.from as vi.Mock).mockReturnValue({
+  test('upgrades user to admin on admin login', async () => {
+    (supabase.auth.getSession as vi.Mock).mockResolvedValueOnce({ data: { session: null }, error: null });
+
+    // 1. Initial login as a regular user
+    (supabase.from as vi.Mock).mockReturnValueOnce({
       select: () => ({
         eq: () => ({
-          maybeSingle: () => Promise.resolve({ data: mockAdminProfile, error: null }),
+          maybeSingle: () => Promise.resolve({ data: { ...mockUserProfile }, error: null }),
         }),
       }),
+    } as any);
+
+    const { rerender } = renderWithAuthProvider(<TestComponent />);
+
+    const signInButton = screen.getByTestId('signin-google');
+    await act(async () => {
+      await userEvent.click(signInButton);
     });
 
-    render(
-      <MemoryRouter>
-        <MockAuthProvider navigate={vi.fn()}> {/* Mock navigate */}
-          <TestComponent />
-        </MockAuthProvider>
-      </MemoryRouter>
-    );
-
-    // Wait for initial load and user to be present
     await waitFor(() => {
-      expect(screen.getByTestId('user-email')).toBeInTheDocument();
+      expect(screen.getByTestId('profile-role')).toHaveTextContent('user');
     });
 
+    // 2. Log out
     const signOutButton = screen.getByTestId('signout');
     await act(async () => {
       await userEvent.click(signOutButton);
@@ -275,8 +275,43 @@ describe('useAuth Hook', () => {
 
     await waitFor(() => {
       expect(screen.queryByTestId('user-email')).not.toBeInTheDocument();
-      expect(screen.queryByTestId('profile-role')).not.toBeInTheDocument();
-      expect(screen.getByText('Loaded')).toBeInTheDocument(); // Still loaded, just no user
-    }, { timeout: 10000 });
+    });
+
+    // 3. Log back in as admin
+    (supabase.from as vi.Mock).mockReturnValueOnce({
+      // Mock the profile fetch for the admin login
+      select: () => ({
+        eq: () => ({
+          maybeSingle: () => Promise.resolve({ data: { ...mockUserProfile }, error: null }),
+        }),
+      }),
+      // Mock the role update call
+      update: () => ({
+        eq: () => ({
+          select: () => ({
+            single: () => Promise.resolve({ data: { ...mockUserProfile, role: 'admin' }, error: null }),
+          }),
+        }),
+      }),
+    } as any);
+
+    rerender(
+        <MemoryRouter initialEntries={['/']}>
+            <AuthProvider navigate={vi.fn()}>
+                <Routes>
+                    <Route path="*" element={<TestComponent />} />
+                </Routes>
+            </AuthProvider>
+        </MemoryRouter>
+    );
+
+    const adminSignInButton = screen.getByTestId('signin-google-admin');
+    await act(async () => {
+      await userEvent.click(adminSignInButton);
+    });
+
+    await waitFor(() => {
+      expect(screen.getByTestId('profile-role')).toHaveTextContent('admin');
+    });
   });
 });

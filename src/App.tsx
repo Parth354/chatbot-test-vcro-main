@@ -16,7 +16,7 @@ import AgentCreate from "./pages/AgentCreate";
 import AgentConversationHistory from "./pages/AgentConversationHistory";
 import { AuthProvider } from "./hooks/useAuth";
 import ProtectedRoute from "./components/ProtectedRoute";
-import AuthCallback from "./pages/AuthCallback"; // Import AuthCallback
+import AuthCallback from "./pages/AuthCallback";
 import RouteLogger from "./components/RouteLogger";
 import ChatbotPreviewPage from "@/pages/ChatbotPreviewPage";
 

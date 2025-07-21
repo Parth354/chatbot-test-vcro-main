@@ -38,7 +38,9 @@ export const useAgentForm = () => {
     type: 'text',
     label: '',
     placeholder: '',
-    required: true
+    required: true,
+    id: Date.now().toString(),
+    order: 0
   });
 
   const handleInputChange = (field: keyof CreateAgentData, value: any) => {
@@ -113,7 +115,7 @@ export const useAgentForm = () => {
       };
 
       handleInputChange('lead_form_fields', [...systemFields, ...customFields, field]);
-      setNewFormField({ type: 'text', label: '', placeholder: '', required: true });
+      setNewFormField({ type: 'text', label: '', placeholder: '', required: true, id: Date.now().toString(), order: 0 });
     }
   };
 

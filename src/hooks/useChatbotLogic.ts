@@ -224,46 +224,29 @@ export const useChatbotLogic = ({ chatbotData, previewMode }: UseChatbotLogicPro
   // Fetch user profile on login or component mount if user is already logged in
   useEffect(() => {
     const fetchUserProfile = async () => {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (user) {
+      if (authLoading) return; // Wait until authentication is resolved
+
+      if (authUser) {
         const { data: profile, error } = await supabase
           .from('profiles')
           .select('*')
-          .eq('user_id', user.id)
+          .eq('user_id', authUser.id)
           .maybeSingle();
 
-        if (error && error.code !== 'PGRST116') { // PGRST116 means no rows found
+        if (error) {
           console.error('Error fetching user profile:', error);
-          return null;
+          setCurrentUser(null);
+          setIsLoggedIn(false);
+          return;
         }
 
         if (profile) {
-          return profile;
-        } else {
-          // Profile not found, create a new one
-          const { data: newProfile, error: createError } = await supabase
-            .from('profiles')
-            .insert({
-              user_id: user.id,
-              email: user.email, // Assuming email is always available
-              full_name: user.user_metadata?.full_name || user.user_metadata?.name,
-              avatar_url: user.user_metadata?.avatar_url,
-              role: 'user', // Default role for chatbot users
-            })
-            .select('*')
-            .single();
-
-          if (createError) {
-            console.error('Error creating profile:', createError);
-            return null;
-          }
-          return newProfile;
-        }
-
-        if (profile) {
-          setCurrentUser(profile);
+          setCurrentUser(profile as Profile);
           setIsLoggedIn(true);
         } else {
+          // This case might happen if the profile creation is delayed or fails.
+          // For now, we assume the AuthProvider handles profile creation.
+          console.warn("Profile not found for authenticated user:", authUser.id);
           setCurrentUser(null);
           setIsLoggedIn(false);
         }
@@ -274,19 +257,7 @@ export const useChatbotLogic = ({ chatbotData, previewMode }: UseChatbotLogicPro
     };
 
     fetchUserProfile();
-
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      (event, session) => {
-        if (event === 'SIGNED_IN' || event === 'SIGNED_OUT' || event === 'USER_UPDATED') {
-          fetchUserProfile();
-        }
-      }
-    );
-
-    return () => {
-      subscription.unsubscribe();
-    };
-  }, []); // Run once on mount and on auth state changes
+  }, [authUser, authLoading]);
 
   // Conditional LinkedIn Prompt display
   useEffect(() => {
@@ -373,28 +344,22 @@ export const useChatbotLogic = ({ chatbotData, previewMode }: UseChatbotLogicPro
 
     try {
       // --- Persona Data Fetching (Blocking if not already loaded) ---
-      if (currentUser && currentUser.persona_data && !currentPersonaData) {
-        console.log("Condition met: currentUser exists, persona_data is true, and currentPersonaData is null. Attempting to fetch persona...");
+      if (currentUser && currentUser.linkedin_profile_url && !currentPersonaData) {
+        console.log("Condition met: currentUser exists, linkedin_profile_url is present, and currentPersonaData is null. Attempting to fetch persona...");
         try {
-          currentPersonaData = await AgentService.getUserPerformanceData(currentUser.user_id);
+          currentPersonaData = await AgentService.getUserPerformanceDataByLinkedIn(currentUser.linkedin_profile_url);
           setUserPersona(currentPersonaData); // Update state for future messages
           console.log("Fetched persona data during send:", currentPersonaData);
           if (!currentPersonaData) {
-            console.warn("Persona data flag is true, but no data found in user_performance table for user:", currentUser.user_id);
-            // Optionally, inform the user that persona couldn't be loaded
-            // botResponse = "I couldn't load your persona data, but I'll answer your question.";
-            // isQnAMatch = true; // To skip LLM if we want to send this message
+            console.warn("No data found in user_performance table for user with LinkedIn URL:", currentUser.linkedin_profile_url);
           }
         } catch (personaError) {
           console.error("Error fetching persona data during message send:", personaError);
-          // Optionally, inform the user
-          // botResponse = "There was an error loading your persona. I'll answer your question without it.";
-          // isQnAMatch = true;
         }
-      } else if (currentUser && currentUser.persona_data && currentPersonaData) {
-        console.log("Condition met: currentUser exists, persona_data is true, and persona is already loaded.");
-      } else if (currentUser && !currentUser.persona_data) {
-        console.log("Condition NOT met: currentUser exists, but persona_data is FALSE.");
+      } else if (currentUser && currentUser.linkedin_profile_url && currentPersonaData) {
+        console.log("Condition met: currentUser exists, linkedin_profile_url is present, and persona is already loaded.");
+      } else if (currentUser && !currentUser.linkedin_profile_url) {
+        console.log("Condition NOT met: currentUser exists, but linkedin_profile_url is FALSE.");
       } else {
         console.log("Condition NOT met: currentUser does not exist.");
       }

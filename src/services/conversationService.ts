@@ -10,7 +10,7 @@ export const ConversationService = {
       .eq("agent_id", agentId);
 
     if (!includeDeleted) {
-      query = query.eq("deleted_by_admin", false); // Only fetch non-soft-deleted sessions if not explicitly including deleted
+      query = query.eq("deleted_by_admin", false);
     }
 
     if (filters.dateFrom) {
@@ -26,19 +26,61 @@ export const ConversationService = {
       query = query.or(`user_name.ilike.%${filters.keyword}%,user_email.ilike.%${filters.keyword}%`);
     }
 
-    const { data, error } = await query
+    const { data: sessionsData, error: sessionsError } = await query
       .order("last_message_at", { ascending: false });
 
-    if (error) {
-      console.error("Error fetching chat sessions:", error);
-      throw new Error(error.message);
+    if (sessionsError) {
+      console.error("Error fetching chat sessions:", sessionsError);
+      throw new Error(sessionsError.message);
     }
 
-    // Manually map the count to message_count
-    return (data as RawChatSessionData[]).map(session => ({
-      ...session,
-      message_count: session.messages[0]?.count || 0,
-    })) as ChatSession[];
+    if (!sessionsData || sessionsData.length === 0) {
+      return [];
+    }
+
+    // Identify and delete anonymous sessions with no messages
+    const sessionsToDelete = sessionsData.filter(
+      (session: any) => session.user_id === null && session.messages[0]?.count === 0
+    );
+
+    if (sessionsToDelete.length > 0) {
+      console.log(`[getChatSessions] Found ${sessionsToDelete.length} anonymous, empty sessions to delete.`);
+      const deletePromises = sessionsToDelete.map(session => this.hardDeleteChatSession(session.id));
+      await Promise.all(deletePromises);
+    }
+
+    // Filter out the deleted sessions from the main list
+    const finalSessions = sessionsData.filter(
+      (session: any) => !sessionsToDelete.some(deletedSession => deletedSession.id === session.id)
+    );
+
+    const userIds = [...new Set(finalSessions.map(s => s.user_id).filter(id => id !== null))];
+
+    let profilesMap = new Map();
+    if (userIds.length > 0) {
+      const { data: profilesData, error: profilesError } = await supabase
+        .from('profiles')
+        .select('user_id, full_name, email')
+        .in('user_id', userIds);
+
+      if (profilesError) {
+        console.error("Error fetching profiles:", profilesError);
+      } else {
+        profilesMap = new Map(profilesData.map(p => [p.user_id, p]));
+      }
+    }
+
+    const sessionsWithProfileData = (sessionsData as any[]).map(session => {
+      const profile = session.user_id ? profilesMap.get(session.user_id) : null;
+      return {
+        ...session,
+        user_name: profile?.full_name,
+        user_email: profile?.email,
+        message_count: session.messages[0]?.count || 0,
+      };
+    });
+
+    return sessionsWithProfileData as ChatSession[];
   },
 
   async getChatMessages(sessionId: string, limit?: number, offset?: number): Promise<ChatMessage[]> {

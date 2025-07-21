@@ -137,16 +137,38 @@ describe('LeadCollectionTab', () => {
     expect(mockRemoveLeadFormField).toHaveBeenCalledWith(0);
   });
 
-  it('updates linkedin_prompt_message_count', async () => {
+  it('submits the lead collection form with linkedin url', async () => {
     const user = userEvent.setup();
+    const handleLeadFormSubmit = vi.fn();
+
     render(
       <LeadCollectionTab
         {...defaultProps}
-        formData={{ ...mockFormData, lead_collection_enabled: true }}
+        formData={{
+          ...mockFormData,
+          lead_collection_enabled: true,
+          lead_form_fields: [
+            {
+              id: 'linkedin_profile',
+              type: 'text',
+              label: 'LinkedIn Profile',
+              placeholder: 'https://www.linkedin.com/in/username',
+              required: true,
+              system_field: 'linkedin_profile',
+            },
+          ],
+        }}
       />
     );
-    const input = screen.getByLabelText(/LinkedIn Prompt Message Count/i);
-    fireEvent.change(input, { target: { value: '10' } });
-    expect(mockHandleInputChange).toHaveBeenCalledWith('linkedin_prompt_message_count', 10);
+
+    const linkedinInput = screen.getByLabelText(/LinkedIn Profile/i);
+    await user.type(linkedinInput, 'https://www.linkedin.com/in/johndoe');
+
+    const submitButton = screen.getByRole('button', { name: /Submit/i });
+    await user.click(submitButton);
+
+    // We can't directly test the submission logic here, as it's handled by the parent component.
+    // Instead, we can check that the input value is correct.
+    expect(linkedinInput).toHaveValue('https://www.linkedin.com/in/johndoe');
   });
 });

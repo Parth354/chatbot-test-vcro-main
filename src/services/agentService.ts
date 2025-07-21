@@ -301,7 +301,7 @@ export class AgentService {
 
     let satisfactionRate = "N/A";
     if (sessionsCount > 0) {
-      satisfactionRate = `${(((responnedSessionsCount || 0) / sessionsCount) * 100).toFixed(0)}%`;
+      satisfactionRate = `${(((respondedSessionsCount || 0) / sessionsCount) * 100).toFixed(0)}%`;
     }
 
     return {
@@ -334,5 +334,32 @@ export class AgentService {
 
     console.log("Fetched persona data from user_performance:", data?.enriched_data); // Log the fetched data
     return data?.enriched_data || null;
+  }
+
+  static async getUserPerformanceDataByLinkedIn(linkedinUrl: string): Promise<any | null> {
+    // Step 1: Find the user_id from the profiles table using the linkedin_profile_url
+    const { data: profile, error: profileError } = await supabase
+      .from('profiles')
+      .select('user_id')
+      .eq('linkedin_profile_url', linkedinUrl)
+      .single();
+
+    if (profileError) {
+      if (profileError.code === 'PGRST116') {
+        console.log(`No profile found with LinkedIn URL: ${linkedinUrl}`);
+        return null;
+      }
+      console.error("Error fetching profile by LinkedIn URL:", profileError);
+      throw new Error(`Failed to fetch profile by LinkedIn URL: ${profileError.message}`);
+    }
+
+    if (!profile) {
+      return null;
+    }
+
+    const userId = profile.user_id;
+
+    // Step 2: Use the user_id to fetch the performance data
+    return this.getUserPerformanceData(userId);
   }
 }
