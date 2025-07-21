@@ -74,7 +74,7 @@ export function ConversationHistoryTab({ agentId }: ConversationHistoryTabProps)
   const loadConversationsWithFilters = async (newFilters: ConversationFilters) => {
     try {
       setLoading(true);
-      const data = await ConversationService.getChatSessions(agentId, newFilters);
+      const data = await ConversationService.getChatSessions(agentId, newFilters, true);
       setConversations(data);
     } catch (error) {
       console.error('Error loading filtered conversations:', error);
@@ -97,7 +97,7 @@ export function ConversationHistoryTab({ agentId }: ConversationHistoryTabProps)
 
       // Update status to 'read' if it's currently 'unread'
       if (conversation.status === 'unread') {
-        // await ConversationService.updateSessionStatus(conversation.id, 'read');
+        await ConversationService.updateChatSessionStatus(conversation.id, 'read');
         loadConversations(); // Reload conversations to reflect status change
       }
     } catch (error) {
@@ -405,7 +405,7 @@ export function ConversationHistoryTab({ agentId }: ConversationHistoryTabProps)
                         </div>
                       </TableCell>
                       <TableCell className="max-w-xs truncate">
-                        {'No messages yet'}
+                        {conversation.last_message_preview || 'No messages yet'}
                       </TableCell>
                       <TableCell>{conversation.message_count || 0}</TableCell>
                       <TableCell>

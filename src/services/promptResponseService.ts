@@ -78,35 +78,44 @@ export class PromptResponseService {
     }
   }
 
-  static async findMatchingResponse(agentId: string, userMessage: string): Promise<string | null> {
+  static async getDynamicPrompts(agentId: string): Promise<any[]> {
     const { data, error } = await supabase
-      .from('prompt_responses')
-      .select('prompt, response, is_dynamic, keywords')
-      .eq('agent_id', agentId);
+      .from("prompt_responses")
+      .select("prompt, response")
+      .eq("agent_id", agentId)
+      .eq("is_dynamic", true);
+
+    if (error) {
+      console.error("Error fetching dynamic prompts:", error);
+      return [];
+    }
+    return data || [];
+  }
+
+  static async findMatchingResponse(agentId: string, message: string): Promise<string | null> {
+    const { data, error } = await supabase
+      .from("prompt_responses")
+      .select("prompt, response, is_dynamic, keywords")
+      .eq("agent_id", agentId);
 
     if (error || !data) {
-      console.error('Error finding matching response:', error);
+      console.error("Error finding matching response:", error);
       return null;
     }
 
-    const userMessageLower = userMessage.toLowerCase();
+    const lowerCaseMessage = message.toLowerCase();
 
-    // First, check for exact prompt matches
+    // First, check for an exact match on non-dynamic prompts
     for (const item of data) {
-      if (!item.is_dynamic && item.prompt.toLowerCase() === userMessageLower) {
+      if (!item.is_dynamic && item.prompt.toLowerCase() === lowerCaseMessage) {
         return item.response;
       }
     }
 
-    // Then, check for dynamic keyword matches
+    // Then, check for keyword matches on dynamic prompts
     for (const item of data) {
-      if (item.is_dynamic && item.keywords) {
-        const hasMatchingKeyword = item.keywords.some(keyword => 
-          userMessageLower.includes(keyword.toLowerCase())
-        );
-        if (hasMatchingKeyword) {
-          return item.response;
-        }
+      if (item.is_dynamic && item.keywords && item.keywords.some((keyword: string) => lowerCaseMessage.includes(keyword.toLowerCase()))) {
+        return item.response;
       }
     }
 

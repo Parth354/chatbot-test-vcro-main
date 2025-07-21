@@ -1,18 +1,9 @@
 import { vi } from 'vitest';
 import { render, screen, waitFor, act } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { MemoryRouter } from 'react-router-dom'; // Keep MemoryRouter for AuthProvider's internal navigation
-import { useAuth } from '../../src/hooks/useAuth';
+import { MemoryRouter, Routes, Route } from 'react-router-dom';
+import { AuthProvider, useAuth } from '../../src/hooks/useAuth';
 import { supabase } from '../../src/integrations/supabase/client';
-
-// Mock react-router-dom to ensure MemoryRouter and other components are available
-vi.mock('react-router-dom', async () => {
-  const actual = await vi.importActual('react-router-dom');
-  return {
-    ...actual,
-    useNavigate: () => vi.fn(), // Mock useNavigate for AuthProvider
-  };
-});
 
 // Mock supabase.auth methods
 vi.mock('../../src/integrations/supabase/client', () => {
@@ -21,12 +12,19 @@ vi.mock('../../src/integrations/supabase/client', () => {
   const mockSupabase = {
     auth: {
       signInWithOAuth: vi.fn((options) => {
+        // Simulate successful sign-in immediately
         const user = options.options.redirectTo.includes('admin=true') ? mockAdminUser : mockUser;
         const session = { user, access_token: 'mock-token', refresh_token: 'mock-refresh', expires_in: 3600 };
         if (authStateChangeCallback) {
           authStateChangeCallback('SIGNED_IN', session);
         }
         return Promise.resolve({ data: { user, session }, error: null });
+      }),
+      signOut: vi.fn(() => {
+        if (authStateChangeCallback) {
+          authStateChangeCallback('SIGNED_OUT', null);
+        }
+        return Promise.resolve({ error: null });
       }),
       getSession: vi.fn(() => Promise.resolve({ data: { session: null }, error: null })),
       onAuthStateChange: vi.fn((callback) => {
@@ -56,23 +54,6 @@ vi.mock('../../src/integrations/supabase/client', () => {
 
   return {
     supabase: mockSupabase,
-  };
-});
-
-// Explicitly mock useAuth and AuthProvider
-vi.mock('../../src/hooks/useAuth', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('../../src/hooks/useAuth')>();
-  const mockUseAuth = vi.fn();
-  const MockAuthProvider = ({ children }: { children: React.ReactNode }) => {
-    // This mock AuthProvider simply renders its children
-    // The actual hook logic will be controlled by mockUseAuth
-    return children;
-  };
-
-  return {
-    ...actual,
-    useAuth: mockUseAuth,
-    AuthProvider: MockAuthProvider,
   };
 });
 
@@ -108,6 +89,19 @@ const mockUserProfile = {
   updated_at: new Date().toISOString(),
 };
 
+// Helper to render component wrapped in AuthProvider
+const renderWithAuthProvider = (ui: React.ReactElement) => {
+  return render(
+    <MemoryRouter>
+      <AuthProvider navigate={vi.fn()}> {/* Mock navigate */}
+        <Routes>
+          <Route path="*" element={ui} />
+        </Routes>
+      </AuthProvider>
+    </MemoryRouter>
+  );
+};
+
 // Test component to expose hook values
 const TestComponent = () => {
   const auth = useAuth();
@@ -126,28 +120,29 @@ const TestComponent = () => {
 describe('useAuth Hook', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    // Reset the mock implementation for each test
-    (useAuth as vi.Mock).mockReturnValue({
-      user: null,
-      profile: null,
-      session: null,
-      loading: true,
-      signOut: vi.fn(),
-      signInWithGoogle: vi.fn(),
-      signInWithGoogleForAdmin: vi.fn(),
-    });
+    // Reset getSession mock for each test to control initial state
+    vi.mocked(supabase.auth.getSession).mockResolvedValue({ data: { session: null }, error: null });
+    // Reset profile fetch mock for each test
+    vi.mocked(supabase.from).mockReturnValue({
+      select: vi.fn(() => ({
+        eq: vi.fn(() => ({
+          maybeSingle: vi.fn().mockResolvedValue({ data: null, error: null }),
+          single: vi.fn().mockResolvedValue({ data: null, error: null }),
+        })),
+      })),
+      insert: vi.fn(() => ({
+        select: vi.fn(() => ({
+          single: vi.fn().mockResolvedValue({ data: null, error: null }),
+        })),
+      })),
+      update: vi.fn(() => ({
+        eq: vi.fn(() => ({})),
+      })),
+    } as any);
   });
 
   test('initial state is loading and no user', async () => {
-    (supabase.auth.getSession as vi.Mock).mockResolvedValueOnce({ data: { session: null }, error: null });
-
-    render(
-      <MemoryRouter>
-        <MockAuthProvider navigate={vi.fn()}> {/* Mock navigate */}
-          <TestComponent />
-        </MockAuthProvider>
-      </MemoryRouter>
-    );
+    renderWithAuthProvider(<TestComponent />);
 
     expect(screen.getByText('Loading...')).toBeInTheDocument();
     await waitFor(() => {
@@ -156,44 +151,42 @@ describe('useAuth Hook', () => {
     });
   });
 
-  test('admin login via Google correctly sets user and admin role', async () => {
-    // Mock the useAuth hook to return a loading state initially, then the admin user
-    (useAuth as vi.Mock).mockReturnValueOnce({
-      user: null,
-      profile: null,
-      session: null,
-      loading: true,
-      signOut: vi.fn(),
-      signInWithGoogle: vi.fn(),
-      signInWithGoogleForAdmin: vi.fn(() => {
-        // Simulate the effect of signInWithOAuth
-        (useAuth as vi.Mock).mockReturnValue({
-          user: mockAdminUser,
-          profile: mockAdminProfile,
-          session: { user: mockAdminUser },
-          loading: false,
-          signOut: vi.fn(),
-          signInWithGoogle: vi.fn(),
-          signInWithGoogleForAdmin: vi.fn(),
-        });
-      }),
-    }).mockReturnValueOnce({
-      user: mockAdminUser,
-      profile: mockAdminProfile,
-      session: { user: mockAdminUser },
-      loading: false,
-      signOut: vi.fn(),
-      signInWithGoogle: vi.fn(),
-      signInWithGoogleForAdmin: vi.fn(),
+  test('AuthProvider provides user and profile if session exists initially', async () => {
+    vi.mocked(supabase.auth.getSession).mockResolvedValueOnce({ data: { session: { user: mockAdminUser } as any }, error: null });
+    vi.mocked(supabase.from('profiles').select().eq().maybeSingle).mockResolvedValueOnce({ data: mockAdminProfile, error: null });
+
+    renderWithAuthProvider(<TestComponent />);
+
+    await waitFor(() => {
+      expect(screen.getByTestId('user-email')).toHaveTextContent(mockAdminUser.email);
+      expect(screen.getByTestId('profile-role')).toHaveTextContent('admin');
+      expect(screen.getByText('Loaded')).toBeInTheDocument();
+    });
+  });
+
+  test('signInWithGoogle correctly sets user and user role', async () => {
+    vi.mocked(supabase.from('profiles').select().eq().maybeSingle).mockResolvedValueOnce({ data: null, error: { code: 'PGRST116' } }); // Profile not found
+    vi.mocked(supabase.from('profiles').insert().select().single).mockResolvedValueOnce({ data: mockUserProfile, error: null }); // New profile created
+
+    renderWithAuthProvider(<TestComponent />);
+
+    const signInButton = screen.getByTestId('signin-google');
+    await act(async () => {
+      await userEvent.click(signInButton);
     });
 
-    render(
-      <MemoryRouter>
-        <MockAuthProvider navigate={vi.fn()}> {/* Mock navigate */}
-          <TestComponent />
-        </MockAuthProvider>
-      </MemoryRouter>
-    );
+    await waitFor(() => {
+      expect(supabase.auth.signInWithOAuth).toHaveBeenCalledWith(expect.objectContaining({ provider: 'google' }));
+      expect(screen.getByTestId('user-email')).toHaveTextContent(mockUser.email);
+      expect(screen.getByTestId('profile-role')).toHaveTextContent('user');
+    });
+  });
+
+  test('signInWithGoogleForAdmin correctly sets user and admin role', async () => {
+    vi.mocked(supabase.from('profiles').select().eq().maybeSingle).mockResolvedValueOnce({ data: null, error: { code: 'PGRST116' } }); // Profile not found
+    vi.mocked(supabase.from('profiles').insert().select().single).mockResolvedValueOnce({ data: mockAdminProfile, error: null }); // New profile created
+
+    renderWithAuthProvider(<TestComponent />);
 
     const adminSignInButton = screen.getByTestId('signin-google-admin');
     await act(async () => {
@@ -201,114 +194,53 @@ describe('useAuth Hook', () => {
     });
 
     await waitFor(() => {
+      expect(supabase.auth.signInWithOAuth).toHaveBeenCalledWith(expect.objectContaining({ options: { redirectTo: expect.stringContaining('admin=true') } }));
       expect(screen.getByTestId('user-email')).toHaveTextContent(mockAdminUser.email);
       expect(screen.getByTestId('profile-role')).toHaveTextContent('admin');
-    }, { timeout: 10000 });
+    });
   });
 
-  test('regular user login via Google correctly sets user and user role', async () => {
-    // Mock initial session to be null
-    (supabase.auth.getSession as vi.Mock).mockResolvedValueOnce({ data: { session: null }, error: null });
+  test('signOut clears user and profile states', async () => {
+    // Start with a logged-in user
+    vi.mocked(supabase.auth.getSession).mockResolvedValueOnce({ data: { session: { user: mockUser } as any }, error: null });
+    vi.mocked(supabase.from('profiles').select().eq().maybeSingle).mockResolvedValueOnce({ data: mockUserProfile, error: null });
 
-    // Mock profile fetch/creation for regular user
-    (supabase.from as vi.Mock).mockReturnValue({
-      select: () => ({
-        eq: () => ({
-          maybeSingle: () => Promise.resolve({ data: null, error: { code: 'PGRST116' } }), // Profile not found
-          single: () => Promise.resolve({ data: mockUserProfile, error: null }), // New profile created
-        }),
-      }),
-      insert: () => ({
-        select: () => ({
-          single: () => Promise.resolve({ data: mockUserProfile, error: null }),
-        }),
-      }),
-    });
-
-    render(
-      <MemoryRouter>
-        <MockAuthProvider navigate={vi.fn()}> {/* Mock navigate */}
-          <TestComponent />
-        </MockAuthProvider>
-      </MemoryRouter>
-    );
-
-    const signInButton = screen.getByTestId('signin-google');
-    await act(async () => {
-      await userEvent.click(signInButton);
-    });
+    renderWithAuthProvider(<TestComponent />);
 
     await waitFor(() => {
       expect(screen.getByTestId('user-email')).toHaveTextContent(mockUser.email);
-      expect(screen.getByTestId('profile-role')).toHaveTextContent('user');
-    }, { timeout: 10000 });
-  });
-
-  test('upgrades user to admin on admin login', async () => {
-    (supabase.auth.getSession as vi.Mock).mockResolvedValueOnce({ data: { session: null }, error: null });
-
-    // 1. Initial login as a regular user
-    (supabase.from as vi.Mock).mockReturnValueOnce({
-      select: () => ({
-        eq: () => ({
-          maybeSingle: () => Promise.resolve({ data: { ...mockUserProfile }, error: null }),
-        }),
-      }),
-    } as any);
-
-    const { rerender } = renderWithAuthProvider(<TestComponent />);
-
-    const signInButton = screen.getByTestId('signin-google');
-    await act(async () => {
-      await userEvent.click(signInButton);
     });
 
-    await waitFor(() => {
-      expect(screen.getByTestId('profile-role')).toHaveTextContent('user');
-    });
-
-    // 2. Log out
     const signOutButton = screen.getByTestId('signout');
     await act(async () => {
       await userEvent.click(signOutButton);
     });
 
     await waitFor(() => {
+      expect(supabase.auth.signOut).toHaveBeenCalled();
       expect(screen.queryByTestId('user-email')).not.toBeInTheDocument();
+      expect(screen.queryByTestId('profile-role')).not.toBeInTheDocument();
+      expect(screen.getByText('Loaded')).toBeInTheDocument(); // Still loaded, but no user
+    });
+  });
+
+  test('profile role is updated if user role changes after login', async () => {
+    // Simulate initial login as a regular user
+    vi.mocked(supabase.auth.getSession).mockResolvedValueOnce({ data: { session: { user: mockUser } as any }, error: null });
+    vi.mocked(supabase.from('profiles').select().eq().maybeSingle).mockResolvedValueOnce({ data: mockUserProfile, error: null });
+
+    const { rerender } = renderWithAuthProvider(<TestComponent />);
+
+    await waitFor(() => {
+      expect(screen.getByTestId('profile-role')).toHaveTextContent('user');
     });
 
-    // 3. Log back in as admin
-    (supabase.from as vi.Mock).mockReturnValueOnce({
-      // Mock the profile fetch for the admin login
-      select: () => ({
-        eq: () => ({
-          maybeSingle: () => Promise.resolve({ data: { ...mockUserProfile }, error: null }),
-        }),
-      }),
-      // Mock the role update call
-      update: () => ({
-        eq: () => ({
-          select: () => ({
-            single: () => Promise.resolve({ data: { ...mockUserProfile, role: 'admin' }, error: null }),
-          }),
-        }),
-      }),
-    } as any);
+    // Simulate a change in profile role (e.g., admin upgrades user)
+    vi.mocked(supabase.auth.getSession).mockResolvedValueOnce({ data: { session: { user: mockAdminUser } as any }, error: null });
+    vi.mocked(supabase.from('profiles').select().eq().maybeSingle).mockResolvedValueOnce({ data: mockAdminProfile, error: null });
 
-    rerender(
-        <MemoryRouter initialEntries={['/']}>
-            <AuthProvider navigate={vi.fn()}>
-                <Routes>
-                    <Route path="*" element={<TestComponent />} />
-                </Routes>
-            </AuthProvider>
-        </MemoryRouter>
-    );
-
-    const adminSignInButton = screen.getByTestId('signin-google-admin');
-    await act(async () => {
-      await userEvent.click(adminSignInButton);
-    });
+    // Trigger re-render to pick up the new session/profile state
+    rerender(renderWithAuthProvider(<TestComponent />).container.firstChild as React.ReactElement);
 
     await waitFor(() => {
       expect(screen.getByTestId('profile-role')).toHaveTextContent('admin');

@@ -74,7 +74,7 @@ export class FeedbackService {
   static async getFeedbackForAgent(agentId: string, feedbackType?: 'up' | 'down'): Promise<MessageFeedback[]> {
     const { data: sessions } = await supabase
       .from('chat_sessions')
-      .select('id')
+      .select('id, user_id') // Select user_id to fetch profiles
       .eq('agent_id', agentId);
 
     if (!sessions || sessions.length === 0) {
@@ -82,6 +82,7 @@ export class FeedbackService {
     }
 
     const sessionIds = sessions.map(s => s.id);
+    const userIds = [...new Set(sessions.map(s => s.user_id).filter(Boolean))];
 
     let query = supabase
       .from('message_feedback')
@@ -103,7 +104,7 @@ export class FeedbackService {
     // Fetch all relevant chat sessions in one go
     const { data: sessionsData, error: sessionsError } = await supabase
       .from('chat_sessions')
-      .select('id, user_name, user_email')
+      .select('id, user_id, user_name, user_email') // Ensure user_id is selected
       .in('id', sessionIds);
 
     if (sessionsError) {
@@ -111,7 +112,29 @@ export class FeedbackService {
       throw sessionsError;
     }
 
-    const sessionsMap = new Map(sessionsData?.map(s => [s.id, s]));
+    // Fetch profiles for non-anonymous users
+    let profilesMap = new Map();
+    if (userIds.length > 0) {
+        const { data: profilesData, error: profilesError } = await supabase
+            .from('profiles')
+            .select('user_id, full_name, email')
+            .in('user_id', userIds);
+
+        if (profilesError) {
+            console.error("Error fetching profiles:", profilesError);
+        } else {
+            profilesMap = new Map(profilesData.map(p => [p.user_id, p]));
+        }
+    }
+
+    const sessionsMap = new Map(sessionsData?.map(s => {
+        const profile = s.user_id ? profilesMap.get(s.user_id) : null;
+        return [s.id, {
+            ...s,
+            user_name: profile?.full_name || s.user_name,
+            user_email: profile?.email || s.user_email
+        }];
+    }));
 
     // Get message details separately to avoid foreign key issues
     const feedbackWithMessages = await Promise.all(

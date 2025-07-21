@@ -24,6 +24,7 @@ const AdminDashboard = () => {
     totalSessions: 0,
     totalMessages: 0,
     todayMessages: 0,
+    yesterdayMessages: 0,
     leadsRequiringAttention: 0,
     averageResponseTime: "< 1 min",
     satisfactionRate: "N/A"
@@ -35,40 +36,63 @@ const AdminDashboard = () => {
 
   useEffect(() => {
     if (user) {
-      loadAgents();
-      loadMetrics();
+      loadAgentsAndMetrics();
     } else {
       setLoading(false);
     }
   }, [user, navigate]);
 
-  const loadAgents = async () => {
+  const loadAgentsAndMetrics = async () => {
+    setLoading(true);
     try {
-      setLoading(true);
       if (!user) return;
       const agentsData = await AgentService.getAgents(user.id);
       setAgents(agentsData);
+
+      let aggregatedMetrics = {
+        totalSessions: 0,
+        totalMessages: 0,
+        todayMessages: 0,
+        leadsRequiringAttention: 0,
+        averageResponseTime: "N/A", // Placeholder
+        satisfactionRate: "N/A" // Placeholder
+      };
+
+      let totalSatisfaction = 0;
+      let agentsWithSatisfactionRate = 0;
+
+      for (const agent of agentsData) {
+        const agentMetrics = await AgentService.getAgentMetrics(agent.id);
+        aggregatedMetrics.totalSessions += agentMetrics.totalSessions;
+        aggregatedMetrics.totalMessages += agentMetrics.totalMessages;
+        aggregatedMetrics.todayMessages += agentMetrics.todayMessages;
+        aggregatedMetrics.yesterdayMessages += agentMetrics.yesterdayMessages; // Add this line
+        aggregatedMetrics.leadsRequiringAttention += agentMetrics.leadsRequiringAttention;
+
+        if (agentMetrics.satisfactionRate !== "N/A") {
+          totalSatisfaction += parseInt(agentMetrics.satisfactionRate.replace("%", ""));
+          agentsWithSatisfactionRate++;
+        }
+      }
+
+      if (agentsWithSatisfactionRate > 0) {
+        aggregatedMetrics.satisfactionRate = `${Math.round(totalSatisfaction / agentsWithSatisfactionRate)}%`;
+      }
+
+      const percentageChange = aggregatedMetrics.yesterdayMessages > 0
+        ? Math.round(((aggregatedMetrics.todayMessages - aggregatedMetrics.yesterdayMessages) / aggregatedMetrics.yesterdayMessages) * 100)
+        : aggregatedMetrics.todayMessages > 0 ? 100 : 0;
+
+      setMetrics({ ...aggregatedMetrics, percentageChange });
+
     } catch (error) {
       toast({
         title: "Error",
-        description: "Failed to load agents. Please try again.",
+        description: "Failed to load agents or metrics. Please try again.",
         variant: "destructive"
       });
     } finally {
       setLoading(false);
-    }
-  };
-
-  const loadMetrics = async () => {
-    try {
-      const metricsData = await AgentService.getAdminMetrics();
-      setMetrics(metricsData);
-    } catch (error) {
-      toast({
-        title: "Error",
-        description: "Failed to load admin metrics. Please try again.",
-        variant: "destructive"
-      });
     }
   };
 
@@ -168,7 +192,7 @@ const AdminDashboard = () => {
             </CardHeader>
             <CardContent>
               <div className="text-2xl font-bold">{metrics.todayMessages}</div>
-              <p className="text-xs text-muted-foreground">+0% from yesterday</p>
+              <p className="text-xs text-muted-foreground">{metrics.percentageChange >= 0 ? `+${metrics.percentageChange}%` : `${metrics.percentageChange}%`} from yesterday</p>
             </CardContent>
           </Card>
 

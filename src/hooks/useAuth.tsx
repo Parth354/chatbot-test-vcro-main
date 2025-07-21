@@ -1,4 +1,4 @@
-import { createContext, useContext, useEffect, useState } from 'react'
+import { createContext, useContext, useEffect, useState, useMemo } from 'react'
 import { User, Session } from '@supabase/supabase-js'
 import { supabase } from '@/integrations/supabase/client'
 import { Profile } from '@/types/agent'
@@ -136,7 +136,10 @@ export const AuthProvider = ({ children, navigate }: { children: React.ReactNode
     const handleSession = async (session: Session | null) => {
       if (isMounted) {
         setSession(session);
-        setUser(session?.user ?? null);
+        // Only update user if the user ID has actually changed
+        if (session?.user?.id !== user?.id) {
+          setUser(session?.user ?? null);
+        }
         if (session?.user) {
           const userProfile = await fetchUserProfile(session);
           setProfile(userProfile);
@@ -202,7 +205,7 @@ export const AuthProvider = ({ children, navigate }: { children: React.ReactNode
     }
   };
 
-  const value = {
+  const value = useMemo(() => ({
     user,
     profile,
     session,
@@ -210,7 +213,7 @@ export const AuthProvider = ({ children, navigate }: { children: React.ReactNode
     signOut,
     signInWithGoogle,
     signInWithGoogleForAdmin,
-  };
+  }), [user, profile, session, loading, signOut, signInWithGoogle, signInWithGoogleForAdmin]);
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }

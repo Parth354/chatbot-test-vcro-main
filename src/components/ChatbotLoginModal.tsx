@@ -23,7 +23,6 @@ export default function ChatbotLoginModal({ isOpen, onClose, onSuccess }: Chatbo
   const { user, profile, loading: authLoading, signInWithGoogle } = useAuth();
 
   useEffect(() => {
-    console.log("Auth state in modal:", { user, profile, authLoading });
     if (!authLoading && user) {
       onSuccess(user);
       onClose();

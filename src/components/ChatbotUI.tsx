@@ -72,6 +72,7 @@ const ChatbotUIContent: React.FC<ChatbotUIProps> = ({ chatbotData, previewMode, 
     handleLeadFormSubmit,
     handleLeadFormCancel,
     setLinkedinUrlInput,
+    handleCtaButtonClick,
   } = useChatbotLogic({ chatbotData, previewMode });
 
   // Use the prop for loading state
@@ -208,7 +209,12 @@ const ChatbotUIContent: React.FC<ChatbotUIProps> = ({ chatbotData, previewMode, 
                       <TooltipTrigger asChild>
                         <button
                           onClick={() => handleFeedback('up', chatMessage.id)}
-                          className={`p-1.5 transition-colors rounded ${chatMessage.feedback_type === 'up' ? 'text-green-600' : 'text-gray-400 hover:text-green-600'}`}
+                          disabled={isLivePreview}
+                          className={`p-1.5 transition-colors rounded ${
+                            chatMessage.feedback_type === 'up'
+                              ? 'text-green-600'
+                              : 'text-gray-400 hover:text-green-600'
+                          }`}
                         >
                           <ThumbsUp size={14} />
                         </button>
@@ -218,13 +224,18 @@ const ChatbotUIContent: React.FC<ChatbotUIProps> = ({ chatbotData, previewMode, 
                       </TooltipContent>
                     </Tooltip>
                   </TooltipProvider>
-                  
+
                   <TooltipProvider>
                     <Tooltip>
                       <TooltipTrigger asChild>
                         <button
                           onClick={() => handleFeedback('down', chatMessage.id)}
-                          className={`p-1.5 transition-colors rounded ${chatMessage.feedback_type === 'down' ? 'text-red-600' : 'text-gray-400 hover:text-red-600'}`}
+                          disabled={isLivePreview}
+                          className={`p-1.5 transition-colors rounded ${
+                            chatMessage.feedback_type === 'down'
+                              ? 'text-red-600'
+                              : 'text-gray-400 hover:text-red-600'
+                          }`}
                         >
                           <ThumbsDown size={14} />
                         </button>
@@ -363,7 +374,7 @@ const ChatbotUIContent: React.FC<ChatbotUIProps> = ({ chatbotData, previewMode, 
               {ctaButtons.map((button, index) => (
                 <Button
                   key={index}
-                  onClick={() => window.open(button.url, '_blank')}
+                  onClick={() => handleCtaButtonClick(index, button.url)}
                   className={`flex-1 font-semibold py-3 rounded-full transition-all duration-200 hover:shadow-lg ${
                     index === 0 
                       ? 'bg-widget-primary hover:bg-widget-primary/90 text-white' 

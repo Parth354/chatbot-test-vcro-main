@@ -52,10 +52,12 @@ export const useChatbotLogic = ({ chatbotData, previewMode }: UseChatbotLogicPro
   const [linkedInPrompted, setLinkedInPrompted] = useState(false);
   const [threadId, setThreadId] = useState<string | undefined>(undefined);
   const [userPersona, setUserPersona] = useState<any | null>(null); // New state for persona data
+  const MESSAGES_PER_LOAD = 10; // Define how many messages to load at once
   const [messagesOffset, setMessagesOffset] = useState(0);
   const [hasMoreMessages, setHasMoreMessages] = useState(true);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const prevScrollHeight = useRef(0);
+  const sessionInitializedRef = useRef(false);
 
   // Data initialization effect (from ChatbotPreview)
   useEffect(() => {
@@ -141,6 +143,54 @@ export const useChatbotLogic = ({ chatbotData, previewMode }: UseChatbotLogicPro
     return () => clearInterval(interval);
   }, [isExpanded, messages]);
 
+  // Load initial chat history and handle lazy loading
+  // This useEffect is now primarily for initial load and will be simplified
+  
+
+  const loadMoreMessages = useCallback(async () => {
+    if (!sessionId || !hasMoreMessages) return;
+
+    try {
+      const oldScrollHeight = scrollContainerRef.current?.scrollHeight || 0;
+      const newMessages = await ConversationService.getChatMessages(sessionId, MESSAGES_PER_LOAD, messagesOffset, true);
+      const formattedMessages = newMessages.map(msg => ({
+        id: msg.id,
+        text: msg.content,
+        sender: msg.sender,
+        timestamp: new Date(msg.created_at),
+      }));
+      
+      setChatHistory(prev => [...formattedMessages, ...prev]);
+      setMessagesOffset(prev => prev + formattedMessages.length);
+      setHasMoreMessages(formattedMessages.length === MESSAGES_PER_LOAD);
+
+      // Maintain scroll position
+      if (scrollContainerRef.current) {
+        scrollContainerRef.current.scrollTop = scrollContainerRef.current.scrollHeight - oldScrollHeight;
+      }
+    } catch (error) {
+      console.error("Error loading more messages:", error);
+    }
+  }, [sessionId, messagesOffset, hasMoreMessages]);
+
+  // Scroll event listener for lazy loading
+  useEffect(() => {
+    const scrollContainer = scrollContainerRef.current;
+    if (!scrollContainer) return;
+
+    const handleScroll = () => {
+      if (scrollContainer.scrollTop === 0 && hasMoreMessages) {
+        loadMoreMessages();
+      }
+    };
+
+    scrollContainer.addEventListener('scroll', handleScroll);
+
+    return () => {
+      scrollContainer.removeEventListener('scroll', handleScroll);
+    };
+  }, [loadMoreMessages, hasMoreMessages]);
+
   // Auto-scroll to bottom (from ChatbotWidget)
   useEffect(() => {
     if (scrollContainerRef.current) {
@@ -151,33 +201,97 @@ export const useChatbotLogic = ({ chatbotData, previewMode }: UseChatbotLogicPro
   // Session initialization and user change handling
   useEffect(() => {
     const initializeSession = async () => {
+      // Prevent re-initialization if already done and dependencies haven't truly changed
+      if (sessionInitializedRef.current && sessionId && !authLoading && internalChatbotData?.id) {
+        console.log("Session already initialized and stable. Skipping re-initialization.");
+        return;
+      }
+
       if (authLoading || !internalChatbotData?.id) {
         console.log("Waiting for auth state or chatbotData.id to initialize session.");
         return;
       }
 
       try {
-        const currentSessionId = SessionManager.getSessionCookie();
-        const newSessionId = await ConversationService.createOrUpdateSession(
-          internalChatbotData.id,
-          currentSessionId,
-          authUser?.id
-        );
+        let newSessionId: string;
+        let initialMessages: any[] = [];
+        let shouldClearHistory = false; // Flag to control history clearing
+
+        if (authUser) {
+          // Try to find an existing session for the logged-in user and agent
+          const existingSession = await ConversationService.getLatestSessionForUserAndAgent(authUser.id, internalChatbotData.id, true);
+          if (existingSession) {
+            newSessionId = existingSession.id;
+            initialMessages = await ConversationService.getChatMessages(newSessionId, MESSAGES_PER_LOAD, 0, true);
+            console.log("Found existing session for user:", newSessionId);
+            // If existing session found, don't clear history unless it's a new login after signout
+            if (!sessionId || sessionId !== newSessionId) { // Check if session ID actually changed
+              shouldClearHistory = true;
+            }
+          } else {
+            // If no existing session, create a new one for the user
+            newSessionId = await ConversationService.createOrUpdateSession(
+              internalChatbotData.id,
+              undefined, // No current session ID to pass, as we want a user-specific one
+              authUser.id,
+              true // forChatbotWidget
+            );
+            console.log("Created new session for user:", newSessionId);
+            shouldClearHistory = true; // New session, so clear history
+          }
+        } else {
+          // For anonymous users, use or create a session based on cookie
+          const currentSessionId = SessionManager.getSessionCookie();
+          newSessionId = await ConversationService.createOrUpdateSession(
+            internalChatbotData.id,
+            currentSessionId,
+            undefined,
+            true // forChatbotWidget
+          );
+          initialMessages = await ConversationService.getChatMessages(newSessionId, MESSAGES_PER_LOAD, 0, true);
+          console.log("Initialized anonymous session:", newSessionId);
+          // Only clear history if it's a new anonymous session (e.g., after logout)
+          if (!sessionId || sessionId !== newSessionId) { // Check if session ID actually changed
+            shouldClearHistory = true;
+          }
+        }
 
         setSessionId(newSessionId);
         SessionManager.setSessionCookie(newSessionId);
+        setIsLoggedIn(!!authUser); // Update isLoggedIn state based on authUser presence
+
+        if (shouldClearHistory) {
+          setChatHistory([]); // Clear history only if a new session is genuinely started
+        }
+
+        const formattedMessages = initialMessages.map(msg => ({
+          id: msg.id,
+          text: msg.content,
+          sender: msg.sender,
+          timestamp: new Date(msg.created_at),
+        }));
+        setChatHistory(formattedMessages);
+        setMessagesOffset(formattedMessages.length);
+        setHasMoreMessages(formattedMessages.length === MESSAGES_PER_LOAD);
+        setHasChatHistory(formattedMessages.length > 0);
+
         console.log("Session initialized/updated with agent ID:", internalChatbotData.id, "Session ID:", newSessionId, "User ID:", authUser?.id);
+        sessionInitializedRef.current = true; // Mark session as initialized
+
       } catch (error) {
         console.error("Failed to initialize session:", error);
         const fallbackSessionId = SessionManager.generateSessionId();
         setSessionId(fallbackSessionId);
         SessionManager.setSessionCookie(fallbackSessionId);
+        setIsLoggedIn(false); // Ensure logged out state on error
+        setChatHistory([]); // Clear history on error
         console.log("Using fallback session due to error:", fallbackSessionId);
+        sessionInitializedRef.current = false; // Reset on error
       }
     };
 
     initializeSession();
-  }, [internalChatbotData?.id, authUser, authLoading]);
+  }, [internalChatbotData?.id, authUser?.id, authLoading]);
 
   // Fetch user persona data when user logs in or persona_data flag changes
   useEffect(() => {
@@ -383,35 +497,44 @@ export const useChatbotLogic = ({ chatbotData, previewMode }: UseChatbotLogicPro
           console.log("Matching Q&A response found:", matchingResponse);
           botResponse = matchingResponse;
           isQnAMatch = true;
-        } else if (internalChatbotData?.lead_collection_enabled && internalChatbotData?.lead_form_triggers?.length > 0) {
-          console.log("Lead form triggers:", internalChatbotData.lead_form_triggers);
-          console.log("User message (lowercase):", lowerCaseMessage);
-          const leadTriggerMatch = internalChatbotData.lead_form_triggers.some((trigger: any) =>
-            trigger.keywords.some((keyword: string) => lowerCaseMessage.includes(keyword.toLowerCase()))
-          );
+        } else {
+          const dynamicPrompts = await PromptResponseService.getDynamicPrompts(internalChatbotData.id);
+          const exactMatch = dynamicPrompts.find(p => p.prompt.toLowerCase() === lowerCaseMessage);
 
-          if (leadTriggerMatch) {
-            console.log("Lead collection trigger keyword detected. Showing lead form.");
-            // Check for LinkedIn specific trigger and user status
-            const linkedinKeywords = ["linkedin", "profile", "connect"]; // Define your LinkedIn trigger keywords
-            const isLinkedInTrigger = linkedinKeywords.some(keyword => lowerCaseMessage.includes(keyword));
+          if (exactMatch) {
+            console.log("Matching dynamic prompt found:", exactMatch);
+            botResponse = exactMatch.response;
+            isQnAMatch = true;
+          } else if (internalChatbotData?.lead_collection_enabled && internalChatbotData?.lead_form_triggers?.length > 0) {
+            console.log("Lead form triggers:", internalChatbotData.lead_form_triggers);
+            console.log("User message (lowercase):", lowerCaseMessage);
+            const leadTriggerMatch = internalChatbotData.lead_form_triggers.some((trigger: any) =>
+              trigger.keywords.some((keyword: string) => lowerCaseMessage.includes(keyword.toLowerCase()))
+            );
 
-            if (isLinkedInTrigger && currentUser) {
-              if (currentUser.linkedin_profile_url) {
-                botResponse = "We have your LinkedIn. We shall connect soon.";
-                isQnAMatch = true;
+            if (leadTriggerMatch) {
+              console.log("Lead collection trigger keyword detected. Showing lead form.");
+              // Check for LinkedIn specific trigger and user status
+              const linkedinKeywords = ["linkedin", "profile", "connect"]; // Define your LinkedIn trigger keywords
+              const isLinkedInTrigger = linkedinKeywords.some(keyword => lowerCaseMessage.includes(keyword));
+
+              if (isLinkedInTrigger && currentUser) {
+                if (currentUser.linkedin_profile_url) {
+                  botResponse = "We have your LinkedIn. We shall connect soon.";
+                  isQnAMatch = true;
+                } else {
+                  setShowLeadForm(true);
+                  botResponse = ""; // No bot response, just show the form
+                  isQnAMatch = true; // Treat as a Q&A match to skip LLM
+                }
               } else {
                 setShowLeadForm(true);
                 botResponse = ""; // No bot response, just show the form
                 isQnAMatch = true; // Treat as a Q&A match to skip LLM
               }
             } else {
-              setShowLeadForm(true);
-              botResponse = ""; // No bot response, just show the form
-              isQnAMatch = true; // Treat as a Q&A match to skip LLM
+              console.log("No matching Q&A response or lead trigger found.");
             }
-          } else {
-            console.log("No matching Q&A response or lead trigger found.");
           }
         }
       }
@@ -533,20 +656,13 @@ export const useChatbotLogic = ({ chatbotData, previewMode }: UseChatbotLogicPro
     if (profile) {
       setCurrentUser(profile as Profile);
       setIsLoggedIn(true);
-      setShowLoginModal(false);
-      const newSessionId = await ConversationService.createOrUpdateSession(
-        internalChatbotData.id,
-        SessionManager.getSessionCookie(),
-        user.id
-      );
-      setSessionId(newSessionId);
-      SessionManager.setSessionCookie(newSessionId);
+      setShowLoginModal(false); // Close modal only after successful profile fetch
+      // Let initializeSession handle chat history clearing/loading
     } else {
       console.error("Profile not found after login for user:", user.id);
-      // This case should ideally not happen if handle_new_user() works correctly
-      // but handle it gracefully if it does.
       setIsLoggedIn(false);
       setCurrentUser(null);
+      setShowLoginModal(false); // Close modal even if profile not found
     }
   }, [internalChatbotData?.id]);
 
@@ -557,9 +673,8 @@ export const useChatbotLogic = ({ chatbotData, previewMode }: UseChatbotLogicPro
     setChatHistory([]);
     setHasChatHistory(false);
     setThreadId(undefined);
-    const newSessionId = await ConversationService.createOrUpdateSession(internalChatbotData.id, undefined, undefined);
-    setSessionId(newSessionId);
-    SessionManager.setSessionCookie(newSessionId);
+    // Trigger re-initialization to create a new anonymous session
+    // The useEffect for session initialization will now pick up the authUser change (to null)
   }, [internalChatbotData?.id]);
 
   const handleLinkedInSubmit = useCallback(async () => {
@@ -635,6 +750,13 @@ export const useChatbotLogic = ({ chatbotData, previewMode }: UseChatbotLogicPro
 
   const handleLeadFormCancel = useCallback(() => setShowLeadForm(false), []);
 
+  const handleCtaButtonClick = useCallback(async (buttonIndex: number, url: string) => {
+    if (sessionId) {
+      await ConversationService.incrementCtaButtonClick(sessionId, buttonIndex);
+    }
+    window.open(url, '_blank');
+  }, [sessionId]);
+
   return {
     // State
     internalChatbotData,
@@ -681,5 +803,6 @@ export const useChatbotLogic = ({ chatbotData, previewMode }: UseChatbotLogicPro
     handleLeadFormSubmit,
     handleLeadFormCancel,
     setLinkedinUrlInput,
+    handleCtaButtonClick,
   };
 };

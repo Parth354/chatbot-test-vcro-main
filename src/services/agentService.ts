@@ -1,5 +1,6 @@
-import { supabase } from "@/integrations/supabase/client"
-import type { Agent, CreateAgentData, UpdateAgentData } from "@/types/agent"
+import { supabase } from "@/integrations/supabase/client";
+import type { Agent, CreateAgentData, UpdateAgentData } from "@/types/agent";
+import { FeedbackService } from "./feedbackService"; // Import FeedbackService
 
 export class AgentService {
   // Helper function to parse agent data from Supabase
@@ -223,6 +224,21 @@ export class AgentService {
       throw new Error(`Failed to fetch today's messages: ${todayError.message}`);
     }
 
+    const yesterday = new Date();
+    yesterday.setDate(yesterday.getDate() - 1);
+    yesterday.setHours(0, 0, 0, 0);
+
+    const { count: yesterdayMessagesCount, error: yesterdayError } = await supabase
+      .from('chat_messages')
+      .select('id', { count: 'exact' })
+      .in('session_id', sessionIds)
+      .gte('created_at', yesterday.toISOString())
+      .lt('created_at', today.toISOString());
+
+    if (yesterdayError) {
+      throw new Error(`Failed to fetch yesterday's messages: ${yesterdayError.message}`);
+    }
+
     let { count: leadsRequiringAttention, error: leadsError } = await (supabase
       .from('lead_submissions')
       .select('id', { count: 'exact' })
@@ -233,13 +249,17 @@ export class AgentService {
       console.warn('Could not fetch leads requiring attention:', leadsError.message);
     }
 
+    const { positive, total } = await FeedbackService.getFeedbackStats(agentId);
+    const satisfactionRate = total > 0 ? `${Math.round((positive / total) * 100)}%` : "N/A";
+
     return {
       totalSessions: sessions.length,
       totalMessages: messagesCount || 0,
       todayMessages: todayMessagesCount || 0,
+      yesterdayMessages: yesterdayMessagesCount || 0,
       leadsRequiringAttention: leadsRequiringAttention || 0,
       averageResponseTime: "< 1 min", // Placeholder
-      satisfactionRate: "98%" // Placeholder
+      satisfactionRate: satisfactionRate
     };
   }
 
