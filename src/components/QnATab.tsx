@@ -184,7 +184,6 @@ export function QnATab({ agentId }: QnATabProps) {
                   value={formData.prompt}
                   onChange={(e) => setFormData(prev => ({ ...prev, prompt: e.target.value }))}
                   placeholder="Enter the user prompt or question"
-                  required
                 />
               </div>
 
@@ -196,7 +195,6 @@ export function QnATab({ agentId }: QnATabProps) {
                   onChange={(e) => setFormData(prev => ({ ...prev, response: e.target.value }))}
                   placeholder="Enter the bot's response"
                   rows={4}
-                  required
                 />
               </div>
 

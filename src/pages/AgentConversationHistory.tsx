@@ -5,8 +5,9 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Input } from "@/components/ui/input";
 import { MessageSquare, ArrowLeft, Search } from "lucide-react";
+import ChatMessage from "@/components/ChatMessage";
 import { ConversationService } from "@/services/conversationService";
-import type { ChatSession, ChatMessage } from "@/types/agent";
+import type { ChatSession, ChatMessage as ChatMessageType } from "@/types/agent";
 import { useToast } from "@/hooks/use-toast";
 
 const AgentConversationHistory = () => {
@@ -19,6 +20,14 @@ const AgentConversationHistory = () => {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
+
+  const handleCopyMessageNoOp = (messageText: string) => {
+    console.log("Copy message (no-op in history):", messageText);
+  };
+
+  const handleFeedbackNoOp = async (type: 'up' | 'down', messageId: string) => {
+    console.log("Feedback (no-op in history):", type, messageId);
+  };
 
   useEffect(() => {
     if (agentId) {
@@ -119,7 +128,7 @@ const AgentConversationHistory = () => {
     if (confirm("Are you sure you want to delete ALL sessions for this agent? Anonymous sessions will be permanently deleted, and authenticated sessions will be soft-deleted.")) {
       console.log("[handleDeleteAllSessions] Confirmed deletion, proceeding to service call.");
       try {
-        const allSessions = await ConversationService.getChatSessions(agentId!, { includeDeleted: true });
+        const allSessions = await ConversationService.getChatSessions(agentId!, {}, true);
         let hardDeletedCount = 0;
         let softDeletedCount = 0;
 
@@ -183,7 +192,7 @@ const AgentConversationHistory = () => {
       {/* Sidebar for Sessions */}
       <div className="w-1/4 border-r bg-card flex flex-col">
         <div className="p-4 border-b flex items-center justify-between">
-          <Button variant="ghost" size="icon" onClick={() => navigate(-1)}>
+          <Button variant="ghost" size="icon" onClick={() => navigate(-1)} data-testid="back-button">
             <ArrowLeft className="h-5 w-5" />
           </Button>
           <h2 className="text-xl font-semibold">Conversations</h2>
@@ -262,20 +271,20 @@ const AgentConversationHistory = () => {
               <p className="text-center text-muted-foreground">No messages in this session.</p>
             ) : (
               messages.map((message) => (
-                <div
+                <ChatMessage
                   key={message.id}
-                  className={`mb-4 p-3 rounded-lg max-w-[70%] ${
-                    message.sender === "user"
-                      ? "bg-blue-100 text-blue-900 ml-auto"
-                      : "bg-gray-100 text-gray-900 mr-auto"
-                  }`}
-                >
-                  <p className="font-semibold">{message.sender === "user" ? "User" : "Bot"}</p>
-                  <p>{message.content}</p>
-                  <p className="text-xs text-muted-foreground mt-1">
-                    {new Date(message.created_at).toLocaleString()}
-                  </p>
-                </div>
+                  message={{
+                    id: message.id,
+                    sender: message.sender,
+                    text: message.content,
+                    feedback_type: message.feedback_type,
+                  }}
+                  botAvatar=""
+                  botName=""
+                  isLivePreview={true}
+                  handleCopyMessage={handleCopyMessageNoOp}
+                  handleFeedback={handleFeedbackNoOp}
+                />
               ))
             )
           ) : (

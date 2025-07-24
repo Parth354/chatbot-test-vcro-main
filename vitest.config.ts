@@ -8,6 +8,10 @@ export default defineConfig({
     globals: true,
     environment: 'jsdom',
     setupFiles: './test/setup.ts',
+    extensions: ['.ts', '.tsx'],
+    transformMode: {
+      web: [/\.[jt]sx$/],
+    },
   },
   resolve: {
     alias: {

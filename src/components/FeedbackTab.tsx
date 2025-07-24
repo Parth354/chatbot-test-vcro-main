@@ -155,7 +155,7 @@ export function FeedbackTab({ agentId }: FeedbackTabProps) {
             <div className="space-y-2">
               <label className="text-sm font-medium">Feedback Type</label>
               <Select value={feedbackFilter} onValueChange={(value: 'up' | 'down' | 'all') => setFeedbackFilter(value)}>
-                <SelectTrigger className="w-48">
+                <SelectTrigger className="w-48" data-testid="feedback-type-filter">
                   <SelectValue placeholder="All feedback" />
                 </SelectTrigger>
                 <SelectContent>

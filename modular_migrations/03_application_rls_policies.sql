@@ -59,8 +59,7 @@ CREATE POLICY "Admin can view their agent's chat sessions"
 
 CREATE POLICY "Chatbot user can view their own sessions"
   ON public.chat_sessions FOR SELECT
-  TO authenticated
-  USING (chat_sessions.user_id = auth.uid());
+  USING (chat_sessions.user_id = auth.uid() OR chat_sessions.user_id IS NULL);
 
 CREATE POLICY "Admin can soft-delete chat sessions"
   ON public.chat_sessions FOR UPDATE
@@ -79,7 +78,7 @@ DROP POLICY IF EXISTS "Allow anon/auth to insert chat messages" ON public.chat_m
 DROP POLICY IF EXISTS "Admin can view their agent's chat messages" ON public.chat_messages;
 DROP POLICY IF EXISTS "Chatbot user can view their own chat messages" ON public.chat_messages;
 
-CREATE POLICY "Allow anon/auth to insert chat messages"
+CREATE POLICY "Allow anon/auth to insert chat messages for their session"
   ON public.chat_messages FOR INSERT
   WITH CHECK (
     EXISTS (
@@ -102,12 +101,11 @@ CREATE POLICY "Admin can view their agent's chat messages"
 
 CREATE POLICY "Chatbot user can view their own chat messages"
   ON public.chat_messages FOR SELECT
-  TO authenticated
   USING (
     EXISTS (
       SELECT 1 FROM public.chat_sessions cs
       WHERE cs.id = chat_messages.session_id
-      AND cs.user_id = auth.uid()
+      AND (cs.user_id = auth.uid() OR cs.user_id IS NULL)
     )
   );
 

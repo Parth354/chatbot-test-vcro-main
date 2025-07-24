@@ -1,24 +1,54 @@
 import { expect, vi } from 'vitest';
 import { render, screen, waitFor, act } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+vi.mock('react-router-dom', async (importOriginal) => {
+  const actual = await importOriginal();
+  return {
+    ...actual,
+    MemoryRouter: actual.MemoryRouter,
+    Routes: actual.Routes,
+    Route: actual.Route,
+  };
+});
+
 import { MemoryRouter, Routes, Route } from 'react-router-dom';
+vi.mock('../../src/hooks/useAuth', async (importOriginal) => {
+  const actual = await importOriginal();
+  return {
+    ...actual,
+    AuthProvider: actual.AuthProvider,
+    useAuth: actual.useAuth,
+  };
+});
+
 import { AuthProvider, useAuth } from '../../src/hooks/useAuth';
 import { supabase } from '../../src/integrations/supabase/client';
 
 // Mock supabase.auth methods
-vi.mock('../../src/integrations/supabase/client', () => {
+vi.mock('../../src/integrations/supabase/client', async (importOriginal) => {
+  const actual = await importOriginal();
   let authStateChangeCallback: Function | null = null;
 
   const mockSupabase = {
+    ...actual.supabase,
     auth: {
+      ...actual.supabase.auth,
       signInWithOAuth: vi.fn((options) => {
-        // Simulate successful sign-in immediately
-        const user = options.options.redirectTo.includes('admin=true') ? mockAdminUser : mockUser;
-        const session = { user, access_token: 'mock-token', refresh_token: 'mock-refresh', expires_in: 3600 };
+        let userToReturn;
+        if (options.provider === 'google') {
+          if (options.options?.redirectTo?.includes('/admin')) {
+            userToReturn = mockAdminUser;
+          } else {
+            userToReturn = mockUser;
+          }
+        } else {
+          userToReturn = mockUser;
+        }
+        const session = { user: userToReturn, access_token: 'mock-token', refresh_token: 'mock-refresh', expires_in: 3600 };
         if (authStateChangeCallback) {
           authStateChangeCallback('SIGNED_IN', session);
         }
-        return Promise.resolve({ data: { user, session }, error: null });
+        return Promise.resolve({ data: { user: userToReturn, session }, error: null });
       }),
       signOut: vi.fn(() => {
         if (authStateChangeCallback) {
@@ -36,18 +66,37 @@ vi.mock('../../src/integrations/supabase/client', () => {
     },
     from: vi.fn(() => ({
       select: vi.fn(() => ({
-        eq: vi.fn(() => ({
-          maybeSingle: vi.fn(),
-          single: vi.fn(),
-        })),
+        eq: vi.fn((column, value) => {
+          if (column === 'user_id') {
+            if (value === mockAdminUser.id) {
+              return {
+                maybeSingle: vi.fn().mockResolvedValue({ data: mockAdminProfile, error: null }),
+                single: vi.fn().mockResolvedValue({ data: mockAdminProfile, error: null }),
+              };
+            } else if (value === mockUser.id) {
+              return {
+                maybeSingle: vi.fn().mockResolvedValue({ data: mockUserProfile, error: null }),
+                single: vi.fn().mockResolvedValue({ data: mockUserProfile, error: null }),
+              };
+            }
+          }
+          return {
+            maybeSingle: vi.fn().mockResolvedValue({ data: null, error: null }),
+            single: vi.fn().mockResolvedValue({ data: null, error: null }),
+          };
+        }),
       })),
       insert: vi.fn(() => ({
         select: vi.fn(() => ({
-          single: vi.fn(),
+          single: vi.fn().mockResolvedValue({ data: null, error: null }),
         })),
       })),
       update: vi.fn(() => ({
-        eq: vi.fn(() => ({})),
+        eq: vi.fn(() => ({
+          select: vi.fn(() => ({
+            single: vi.fn(),
+          })),
+        })),
       })),
     })),
   };
@@ -123,22 +172,57 @@ describe('useAuth Hook', () => {
     // Reset getSession mock for each test to control initial state
     vi.mocked(supabase.auth.getSession).mockResolvedValue({ data: { session: null }, error: null });
     // Reset profile fetch mock for each test
-    vi.mocked(supabase.from).mockReturnValue({
-      select: vi.fn(() => ({
-        eq: vi.fn(() => ({
-          maybeSingle: vi.fn().mockResolvedValue({ data: null, error: null }),
-          single: vi.fn().mockResolvedValue({ data: null, error: null }),
-        })),
-      })),
-      insert: vi.fn(() => ({
+    vi.mocked(supabase.from).mockImplementation((tableName) => {
+      if (tableName === 'profiles') {
+        return {
+          select: vi.fn(() => ({
+            eq: vi.fn((column, value) => {
+              if (column === 'user_id') {
+                if (value === mockAdminUser.id) {
+                  return {
+                    maybeSingle: vi.fn().mockResolvedValue({ data: mockAdminProfile, error: null }),
+                    single: vi.fn().mockResolvedValue({ data: mockAdminProfile, error: null }),
+                  };
+                } else if (value === mockUser.id) {
+                  return {
+                    maybeSingle: vi.fn().mockResolvedValue({ data: mockUserProfile, error: null }),
+                    single: vi.fn().mockResolvedValue({ data: mockUserProfile, error: null }),
+                  };
+                }
+              }
+              return {
+                maybeSingle: vi.fn().mockResolvedValue({ data: null, error: null }),
+                single: vi.fn().mockResolvedValue({ data: null, error: null }),
+              };
+            }),
+          })),
+          insert: vi.fn(() => ({
+            select: vi.fn(() => ({
+              single: vi.fn().mockResolvedValue({ data: null, error: null }),
+            })),
+          })),
+          update: vi.fn(() => ({
+            eq: vi.fn(() => ({})),
+          })),
+        } as any;
+      }
+      return {
         select: vi.fn(() => ({
-          single: vi.fn().mockResolvedValue({ data: null, error: null }),
+          eq: vi.fn(() => ({
+            maybeSingle: vi.fn().mockResolvedValue({ data: null, error: null }),
+            single: vi.fn().mockResolvedValue({ data: null, error: null }),
+          })),
         })),
-      })),
-      update: vi.fn(() => ({
-        eq: vi.fn(() => ({})),
-      })),
-    } as any);
+        insert: vi.fn(() => ({
+          select: vi.fn(() => ({
+            single: vi.fn().mockResolvedValue({ data: null, error: null }),
+          })),
+        })),
+        update: vi.fn(() => ({
+          eq: vi.fn(() => ({})),
+        })),
+      } as any;
+    });
   });
 
   test('initial state is loading and no user', async () => {
@@ -194,7 +278,7 @@ describe('useAuth Hook', () => {
     });
 
     await waitFor(() => {
-      expect(supabase.auth.signInWithOAuth).toHaveBeenCalledWith(expect.objectContaining({ options: { redirectTo: expect.stringContaining('admin=true') } }));
+      expect(supabase.auth.signInWithOAuth).toHaveBeenCalledWith(expect.objectContaining({ options: { redirectTo: expect.stringContaining('/admin') } }));
       expect(screen.getByTestId('user-email')).toHaveTextContent(mockAdminUser.email);
       expect(screen.getByTestId('profile-role')).toHaveTextContent('admin');
     });
@@ -229,18 +313,18 @@ describe('useAuth Hook', () => {
     vi.mocked(supabase.auth.getSession).mockResolvedValueOnce({ data: { session: { user: mockUser } as any }, error: null });
     vi.mocked(supabase.from('profiles').select().eq().maybeSingle).mockResolvedValueOnce({ data: mockUserProfile, error: null });
 
-    const { rerender } = renderWithAuthProvider(<TestComponent />);
+    renderWithAuthProvider(<TestComponent />);
 
     await waitFor(() => {
       expect(screen.getByTestId('profile-role')).toHaveTextContent('user');
     });
 
     // Simulate a change in profile role (e.g., admin upgrades user)
-    vi.mocked(supabase.auth.getSession).mockResolvedValueOnce({ data: { session: { user: mockAdminUser } as any }, error: null });
-    vi.mocked(supabase.from('profiles').select().eq().maybeSingle).mockResolvedValueOnce({ data: mockAdminProfile, error: null });
-
-    // Trigger re-render to pick up the new session/profile state
-    rerender(renderWithAuthProvider(<TestComponent />).container.firstChild as React.ReactElement);
+    await act(async () => {
+      // Access the callback from the mock
+      const onAuthStateChangeCallback = vi.mocked(supabase.auth.onAuthStateChange).mock.calls[0][0];
+      onAuthStateChangeCallback('SIGNED_IN', { user: mockAdminUser, access_token: 'new-mock-token' });
+    });
 
     await waitFor(() => {
       expect(screen.getByTestId('profile-role')).toHaveTextContent('admin');

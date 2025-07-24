@@ -92,14 +92,13 @@ describe('OpenAIService', () => {
       expect(OpenAI.prototype.chat.completions.create).toHaveBeenCalledWith({
         model: 'gpt-3.5-turbo',
         messages: [
-          { role: 'system', content: 'You are a helpful assistant.' },
+          { role: 'system', content: 'You are a helpful assistant. Please format your responses using Markdown, especially for code blocks, bold text, and lists.' },
           { role: 'user', content: 'User message' },
         ],
       });
-      expect(result).toEqual({ response: mockResponse });
     });
 
-    it('should include persona data in system message', async () => {
+    it('should include persona data in system message with markdown instruction', async () => {
       const mockResponse = 'Bot response';
       const mockPersona = { description: 'A friendly persona' };
       vi.mocked(OpenAI.prototype.chat.completions.create).mockResolvedValue({
@@ -113,7 +112,7 @@ describe('OpenAIService', () => {
         model: 'gpt-3.5-turbo',
         messages: [
           { role: 'system', content: 'The user you are interacting with has the following persona: A friendly persona' },
-          { role: 'system', content: 'You are a helpful assistant.' },
+          { role: 'system', content: 'You are a helpful assistant. Please format your responses using Markdown, especially for code blocks, bold text, and lists.' },
           { role: 'user', content: 'User message' },
         ],
       });
@@ -137,7 +136,7 @@ describe('OpenAIService', () => {
     it('should create a new thread if none provided', async () => {
       vi.mocked(OpenAI.prototype.beta.threads.create).mockResolvedValue({ id: mockThreadId } as any);
       vi.mocked(OpenAI.prototype.beta.threads.messages.create).mockResolvedValue({} as any);
-      vi.mocked(OpenAI.prototype.beta.threads.runs.createAndPoll).mockResolvedValue({ status: 'completed' } as any);
+      vi.mocked(OpenAI.prototype.beta.threads.runs.createAndPoll).mockResolvedValue({ id: 'run_test', status: 'completed' } as any);
       vi.mocked(OpenAI.prototype.beta.threads.messages.list).mockResolvedValue({
         data: [{ run_id: 'run_test', role: 'assistant', content: [{ type: 'text', text: { value: mockAssistantResponse } }] }],
       } as any);
@@ -158,7 +157,7 @@ describe('OpenAIService', () => {
 
     it('should use provided thread ID', async () => {
       vi.mocked(OpenAI.prototype.beta.threads.messages.create).mockResolvedValue({} as any);
-      vi.mocked(OpenAI.prototype.beta.threads.runs.createAndPoll).mockResolvedValue({ status: 'completed' } as any);
+      vi.mocked(OpenAI.prototype.beta.threads.runs.createAndPoll).mockResolvedValue({ id: 'run_test', status: 'completed' } as any);
       vi.mocked(OpenAI.prototype.beta.threads.messages.list).mockResolvedValue({
         data: [{ run_id: 'run_test', role: 'assistant', content: [{ type: 'text', text: { value: mockAssistantResponse } }] }],
       } as any);

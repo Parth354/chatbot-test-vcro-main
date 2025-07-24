@@ -48,7 +48,7 @@ export class OpenAIService {
 
   private async getChatCompletionResponse(prompt: string, persona?: any): Promise<string> {
     const messages: any[] = [
-        { role: "system", content: "You are a helpful assistant." },
+        { role: "system", content: "You are a helpful assistant. Please format your responses using Markdown, especially for code blocks, bold text, and lists." },
         { role: "user", content: prompt },
     ];
 
@@ -66,12 +66,16 @@ export class OpenAIService {
                 // Fallback to stringifying if no specific fields are found
                 personaContent = JSON.stringify(persona);
             }
+            // Remove unwanted characters from personaContent
+            personaContent = personaContent.replace(/[\n,\[\]{}]/g, '').replace(/"/g, '').trim();
         }
 
         if (personaContent) {
             messages.unshift({
                 role: "system",
-                content: `The user you are interacting with has the following persona: ${personaContent}`,
+                content: `Respond to the user query given below, based on their persona.
+Query:
+Persona: ${personaContent}`,
             });
         }
     }

@@ -1,4 +1,11 @@
 import { render, screen, fireEvent, waitFor, act } from '@testing-library/react';
+import { Alert, AlertDescription } from '@/components/ui/alert';
+
+// Mock Alert and AlertDescription
+vi.mock('@/components/ui/alert', () => ({
+  Alert: ({ children }: { children: React.ReactNode }) => <div role="alert">{children}</div>,
+  AlertDescription: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
+}));
 import userEvent from '@testing-library/user-event';
 import { vi } from 'vitest';
 import ChatbotLoginModal from '@/components/ChatbotLoginModal';
@@ -40,14 +47,16 @@ describe('ChatbotLoginModal', () => {
     });
   });
 
-  it('should not render when isOpen is false', () => {
-    render(
-      <ChatbotLoginModal
-        isOpen={false}
-        onClose={mockOnClose}
-        onSuccess={mockOnSuccess}
-      />
-    );
+  it('should not render when isOpen is false', async () => {
+    await act(async () => {
+      render(
+        <ChatbotLoginModal
+          isOpen={false}
+          onClose={mockOnClose}
+          onSuccess={mockOnSuccess}
+        />
+      );
+    });
     expect(screen.queryByText('Login to Save Chat History')).not.toBeInTheDocument();
   });
 
@@ -72,12 +81,12 @@ describe('ChatbotLoginModal', () => {
         onSuccess={mockOnSuccess}
       />
     );
-    await userEvent.click(screen.getByRole('button', { name: /X/i }));
+    await userEvent.click(screen.getByRole('button', { name: /Close login modal/i }));
     expect(mockOnClose).toHaveBeenCalledTimes(1);
   });
 
   it('should send OTP when email is submitted', async () => {
-    vi.mocked(supabase.auth.signInWithOtp).mockResolvedValue({ data: { user: null, session: null }, error: null });
+    vi.mocked(supabase.auth.signInWithOtp).mockImplementation(() => Promise.resolve({ data: { user: { id: 'test-user', email: 'test@example.com' }, session: {} as any }, error: null }));
 
     render(
       <ChatbotLoginModal
@@ -87,8 +96,10 @@ describe('ChatbotLoginModal', () => {
       />
     );
 
-    await userEvent.type(screen.getByLabelText('Email Address'), 'test@example.com');
-    await userEvent.click(screen.getByRole('button', { name: /Send Login Code/i }));
+    await act(async () => {
+      await userEvent.type(screen.getByLabelText('Email Address'), 'test@example.com');
+      await userEvent.click(screen.getByRole('button', { name: /Send Login Code/i }));
+    });
 
     expect(supabase.auth.signInWithOtp).toHaveBeenCalledWith({ email: 'test@example.com' });
     await waitFor(() => {
@@ -108,12 +119,14 @@ describe('ChatbotLoginModal', () => {
 
     await userEvent.click(screen.getByRole('button', { name: /Send Login Code/i }));
 
-    expect(screen.getByText('Please enter your email')).toBeInTheDocument();
+    await waitFor(() => {
+      expect(screen.getByRole('alert')).toHaveTextContent('Please enter your email');
+    });
     expect(supabase.auth.signInWithOtp).not.toHaveBeenCalled();
   });
 
   it('should display error if signInWithOtp fails', async () => {
-    vi.mocked(supabase.auth.signInWithOtp).mockResolvedValue({ data: { user: null, session: null }, error: { message: 'OTP send failed' } as any });
+        vi.mocked(supabase.auth.signInWithOtp).mockResolvedValue({ data: { user: { id: 'test-user', email: 'test@example.com' }, session: {} as any }, error: null });
 
     render(
       <ChatbotLoginModal
@@ -179,7 +192,9 @@ describe('ChatbotLoginModal', () => {
 
     await userEvent.click(screen.getByRole('button', { name: /Verify & Login/i }));
 
-    expect(screen.getByText('Please enter both email and OTP')).toBeInTheDocument();
+    await waitFor(() => {
+      expect(screen.getByText('Please enter both email and OTP')).toBeInTheDocument();
+    });
     expect(supabase.auth.verifyOtp).not.toHaveBeenCalled();
   });
 

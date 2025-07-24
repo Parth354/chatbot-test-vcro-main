@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { validateAgentData, validateAgentDataForTests } from '@/schemas/agentValidation';
+import { validateAgentData } from '@/schemas/agentValidation';
 
 describe('agentValidation', () => {
   const baseAgentData = {
@@ -34,6 +34,12 @@ describe('agentValidation', () => {
       const result = validateAgentData(baseAgentData);
       expect(result.success).toBe(true);
       expect(result.errors).toHaveLength(0);
+    });
+
+    it('should allow empty but valid URLs', () => {
+      const data = { ...baseAgentData, avatar_url: '', linkedin_url: '' };
+      const result = validateAgentData(data);
+      expect(result.success).toBe(true);
     });
 
     it('should return error for missing name', () => {
@@ -117,7 +123,7 @@ describe('agentValidation', () => {
       ]);
     });
 
-    it('should return multiple errors', () => {
+    it('should return multiple errors for multiple invalid fields', () => {
       const data = { ...baseAgentData, name: '', welcome_message: 'a'.repeat(501), colors: { ...baseAgentData.colors, text: '#ZZZ' } };
       const result = validateAgentData(data);
       expect(result.success).toBe(false);
@@ -126,27 +132,6 @@ describe('agentValidation', () => {
         { field: 'name', message: 'Agent name is required' },
         { field: 'welcome_message', message: 'Welcome message must be under 500 characters' },
         { field: 'colors.text', message: 'Invalid color format (use #RRGGBB)' },
-      ]));
-    });
-  });
-
-  describe('validateAgentDataForTests', () => {
-    it('should return success for valid agent data', () => {
-      const result = validateAgentDataForTests(baseAgentData);
-      expect(result.success).toBe(true);
-      expect(result.errors).toHaveLength(0);
-    });
-
-    it('should return simplified error messages for invalid data', () => {
-      const data = { ...baseAgentData, name: '', description: 'a'.repeat(501), avatar_url: 'bad-url', colors: { ...baseAgentData.colors, primary: '#ABC' } };
-      const result = validateAgentDataForTests(data);
-      expect(result.success).toBe(false);
-      expect(result.errors).toHaveLength(4);
-      expect(result.errors).toEqual(expect.arrayContaining([
-        'Agent name is required',
-        'Description must be 500 characters or less',
-        'Avatar URL must be a valid URL',
-        'Primary color must be a valid hex color',
       ]));
     });
   });

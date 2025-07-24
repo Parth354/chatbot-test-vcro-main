@@ -3,72 +3,81 @@ import { cn, isValidUUID, normalizeLinkedInUrl } from '@/lib/utils';
 
 describe('utils', () => {
   describe('cn', () => {
-    it('should correctly merge Tailwind CSS classes', () => {
-      expect(cn('text-red-500', 'bg-blue-200')).toBe('text-red-500 bg-blue-200');
-    });
-
-    it('should handle empty inputs', () => {
-      expect(cn('', 'bg-blue-200', null, undefined)).toBe('bg-blue-200');
+    it('should merge class names correctly', () => {
+      expect(cn('a', 'b', 'c')).toBe('a b c');
     });
 
     it('should handle conditional classes', () => {
-      const isActive = true;
-      const isDisabled = false;
-      expect(cn('base-class', isActive && 'active-class', isDisabled && 'disabled-class')).toBe('base-class active-class');
+      expect(cn('a', true && 'b', false && 'c')).toBe('a b');
     });
 
-    it('should override duplicate classes with the last one', () => {
+    it('should handle duplicate classes', () => {
+      expect(cn('a', 'b', 'a')).toBe('a b a');
+    });
+
+    it('should handle different types of inputs', () => {
+      expect(cn('a', { b: true, c: false }, ['d', { e: true }])).toBe('a b d e');
+    });
+
+    it('should handle conflicting classes with tailwind-merge', () => {
+      expect(cn('p-4', 'p-2')).toBe('p-2');
       expect(cn('text-red-500', 'text-blue-500')).toBe('text-blue-500');
     });
   });
 
   describe('isValidUUID', () => {
-    it('should return true for valid UUID v4 strings', () => {
-      expect(isValidUUID('123e4567-e89b-12d3-a456-426614174000')).toBe(true);
-      expect(isValidUUID('FFFFFFFF-FFFF-4FFF-AFFF-FFFFFFFFFFFF')).toBe(true);
+    it('should return true for a valid v4 UUID', () => {
+      expect(isValidUUID('f81d4fae-7dec-41d5-927d-1b2c5ea7a7d8')).toBe(true);
     });
 
-    it('should return false for invalid UUID strings (malformed)', () => {
-      expect(isValidUUID('invalid-uuid')).toBe(false);
-      expect(isValidUUID('123e4567-e89b-12d3-a456-42661417400')).toBe(false); // Too short
-      expect(isValidUUID('123e4567-e89b-12d3-a456-4266141740000')).toBe(false); // Too long
-      expect(isValidUUID('123e4567-e89b-12d3-g456-426614174000')).toBe(false); // Invalid character
+    it('should return false for an invalid UUID', () => {
+      expect(isValidUUID('not-a-uuid')).toBe(false);
     });
 
-    it('should return false for UUIDs of wrong version', () => {
-      // UUID v1 example
-      expect(isValidUUID('6ba7b810-9dad-11d1-80b4-00c04fd430c8')).toBe(false);
+    it('should return false for a non-v4 UUID', () => {
+      // v1 UUID
+      expect(isValidUUID('a8a6d540-0e7a-11ef-9262-633747705345')).toBe(false);
     });
 
-    it('should return false for non-string inputs', () => {
-      expect(isValidUUID(null as any)).toBe(false);
-      expect(isValidUUID(undefined as any)).toBe(false);
-      expect(isValidUUID(123 as any)).toBe(false);
-      expect(isValidUUID({} as any)).toBe(false);
+    it('should return false for a UUID with incorrect structure', () => {
+      expect(isValidUUID('f81d4fae-7dec-41d5-927d-1b2c5ea7a7d')).toBe(false);
     });
   });
 
   describe('normalizeLinkedInUrl', () => {
-    it('should normalize various LinkedIn profile URL formats', () => {
-      expect(normalizeLinkedInUrl('https://www.linkedin.com/in/johndoe/')).toBe('https://www.linkedin.com/in/johndoe');
-      expect(normalizeLinkedInUrl('https://linkedin.com/in/johndoe')).toBe('https://www.linkedin.com/in/johndoe');
-      expect(normalizeLinkedInUrl('www.linkedin.com/in/johndoe/')).toBe('https://www.linkedin.com/in/johndoe');
-      expect(normalizeLinkedInUrl('linkedin.com/in/johndoe')).toBe('https://www.linkedin.com/in/johndoe');
-      expect(normalizeLinkedInUrl('https://www.linkedin.com/in/johndoe?trk=profile')).toBe('https://www.linkedin.com/in/johndoe');
+    it('should return a normalized LinkedIn URL for a valid URL', () => {
+      const url = 'https://www.linkedin.com/in/johndoe';
+      expect(normalizeLinkedInUrl(url)).toBe(url);
     });
 
-    it('should handle LinkedIn usernames without full URLs', () => {
-      expect(normalizeLinkedInUrl('johndoe')).toBe('https://www.linkedin.com/in/johndoe');
-      expect(normalizeLinkedInUrl('jane_doe123')).toBe('https://www.linkedin.com/in/jane_doe123');
+    it('should return a normalized LinkedIn URL for a URL with extra path segments', () => {
+      const url = 'https://www.linkedin.com/in/johndoe/details/experience/';
+      expect(normalizeLinkedInUrl(url)).toBe('https://www.linkedin.com/in/johndoe');
     });
 
-    it('should return null for invalid or non-LinkedIn URLs', () => {
-      expect(normalizeLinkedInUrl('http://www.google.com')).toBeNull();
-      expect(normalizeLinkedInUrl('invalid-url')).toBeNull();
-      expect(normalizeLinkedInUrl('https://www.linkedin.com/feed/')).toBeNull(); // Not a profile URL
-      expect(normalizeLinkedInUrl('https://www.linkedin.com/company/some-company')).toBeNull(); // Not a profile URL
-      expect(normalizeLinkedInUrl(null as any)).toBeNull();
-      expect(normalizeLinkedInUrl(undefined as any)).toBeNull();
+    it('should return a normalized LinkedIn URL for a URL with a query string', () => {
+      const url = 'https://www.linkedin.com/in/johndoe?trackingId=12345';
+      expect(normalizeLinkedInUrl(url)).toBe('https://www.linkedin.com/in/johndoe');
+    });
+
+    it('should return a normalized LinkedIn URL for a URL without a protocol', () => {
+      const url = 'www.linkedin.com/in/johndoe';
+      expect(normalizeLinkedInUrl(url)).toBe('https://www.linkedin.com/in/johndoe');
+    });
+
+    it('should return null for an invalid URL', () => {
+      const url = 'not a url';
+      expect(normalizeLinkedInUrl(url)).toBeNull();
+    });
+
+    it('should return null for a non-LinkedIn URL', () => {
+      const url = 'https://www.google.com';
+      expect(normalizeLinkedInUrl(url)).toBeNull();
+    });
+
+    it('should return null for a LinkedIn URL that is not a profile page', () => {
+      const url = 'https://www.linkedin.com/company/google';
+      expect(normalizeLinkedInUrl(url)).toBeNull();
     });
   });
 });

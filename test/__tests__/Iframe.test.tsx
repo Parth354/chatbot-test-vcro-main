@@ -116,7 +116,7 @@ describe('Iframe Page', () => {
     });
   });
 
-  it('should render ChatbotUI with default expanded mode and center alignment', async () => {
+  it('should render ChatbotUI with default expanded mode and bottom-right alignment', async () => {
     renderIframePage('agent-123');
     await waitFor(() => {
       expect(screen.getByTestId('mock-chatbot-ui')).toBeInTheDocument();
@@ -126,11 +126,13 @@ describe('Iframe Page', () => {
           previewMode: 'expanded',
           isLivePreview: true,
           loadingChatbotData: false,
+          onResizeRequest: expect.any(Function),
+          align: 'bottom-right',
         }),
         {}
       );
-      expect(screen.getByRole('main')).toHaveClass('justify-center');
-      expect(screen.getByRole('main')).toHaveClass('items-center');
+      expect(screen.getByRole('main')).toHaveClass('justify-end');
+      expect(screen.getByRole('main')).toHaveClass('items-end');
     });
   });
 
@@ -142,7 +144,7 @@ describe('Iframe Page', () => {
         expect.objectContaining({
           chatbotData: mockAgentData,
           previewMode: 'collapsed',
-          isLivePreview: false, // Collapsed mode implies not live preview
+          isLivePreview: false,
           loadingChatbotData: false,
         }),
         {}
@@ -150,35 +152,52 @@ describe('Iframe Page', () => {
     });
   });
 
-  it('should apply left alignment if specified in query params', async () => {
-    renderIframePage('agent-123', '?align=left');
+  it('should apply top-left alignment if specified in query params', async () => {
+    renderIframePage('agent-123', '?align=top-left');
     await waitFor(() => {
-      expect(screen.getByRole('main')).toHaveClass('justify-start');
-      expect(screen.getByRole('main')).toHaveClass('items-center');
+      expect(ChatbotUI).toHaveBeenCalledWith(
+        expect.objectContaining({
+          chatbotData: mockAgentData,
+          previewMode: 'expanded',
+          isLivePreview: true,
+          loadingChatbotData: false,
+          onResizeRequest: expect.any(Function),
+          align: 'top-left',
+        }),
+        {}
+      );
     });
   });
 
-  it('should apply right alignment if specified in query params', async () => {
-    renderIframePage('agent-123', '?align=right');
+  it('should apply top-right alignment if specified in query params', async () => {
+    renderIframePage('agent-123', '?align=top-right');
     await waitFor(() => {
       expect(screen.getByRole('main')).toHaveClass('justify-end');
-      expect(screen.getByRole('main')).toHaveClass('items-center');
-    });
-  });
-
-  it('should apply top alignment if specified in query params', async () => {
-    renderIframePage('agent-123', '?align=top');
-    await waitFor(() => {
-      expect(screen.getByRole('main')).toHaveClass('justify-center');
       expect(screen.getByRole('main')).toHaveClass('items-start');
     });
   });
 
-  it('should apply bottom alignment if specified in query params', async () => {
-    renderIframePage('agent-123', '?align=bottom');
+  it('should apply bottom-left alignment if specified in query params', async () => {
+    renderIframePage('agent-123', '?align=bottom-left');
+    await waitFor(() => {
+      expect(screen.getByRole('main')).toHaveClass('justify-start');
+      expect(screen.getByRole('main')).toHaveClass('items-end');
+    });
+  });
+
+  it('should apply bottom-right alignment if specified in query params', async () => {
+    renderIframePage('agent-123', '?align=bottom-right');
+    await waitFor(() => {
+      expect(screen.getByRole('main')).toHaveClass('justify-end');
+      expect(screen.getByRole('main')).toHaveClass('items-end');
+    });
+  });
+
+  it('should apply center alignment if specified in query params', async () => {
+    renderIframePage('agent-123', '?align=center');
     await waitFor(() => {
       expect(screen.getByRole('main')).toHaveClass('justify-center');
-      expect(screen.getByRole('main')).toHaveClass('items-end');
+      expect(screen.getByRole('main')).toHaveClass('items-center');
     });
   });
 });

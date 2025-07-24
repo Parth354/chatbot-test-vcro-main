@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from "react";
+import SpeechRecognition from 'react-speech-recognition';
 import { PromptResponseService } from "@/services/promptResponseService";
 import { ConversationService } from "../services/conversationService";
 import { FeedbackService } from "../services/feedbackService";
@@ -16,10 +17,15 @@ import { isValidUUID, normalizeLinkedInUrl } from "../lib/utils";
 interface UseChatbotLogicProps {
   chatbotData: any;
   previewMode?: "collapsed" | "expanded";
+  transcript: string;
+  listening: boolean;
+  resetTranscript: () => void;
+  browserSupportsSpeechRecognition: boolean;
+  onResizeRequest?: (state: "collapsed" | "expanded") => void;
 }
 
-export const useChatbotLogic = ({ chatbotData, previewMode }: UseChatbotLogicProps) => {
-  const { user: authUser, loading: authLoading } = useAuth(); // Use the auth context
+export const useChatbotLogic = ({ chatbotData, previewMode, transcript, listening, resetTranscript, browserSupportsSpeechRecognition, onResizeRequest }: UseChatbotLogicProps) => {
+  const { user: authUser, loading: authLoading } = useAuth();
   const initialPreviewMode = previewMode || "collapsed";
 
   // State from useChatbotState
@@ -200,7 +206,6 @@ export const useChatbotLogic = ({ chatbotData, previewMode }: UseChatbotLogicPro
 
   const initializeSession = useCallback(async () => {
     if (authLoading || !internalChatbotData?.id) {
-      console.log("Waiting for auth state or chatbotData.id to initialize session.");
       return;
     }
 
@@ -228,7 +233,6 @@ export const useChatbotLogic = ({ chatbotData, previewMode }: UseChatbotLogicPro
             authUser.id,
             true // forChatbotWidget
           );
-          console.log("Created new session for user:", newSessionId);
           shouldClearHistory = true; // New session, so clear history
         }
       } else {
@@ -241,7 +245,6 @@ export const useChatbotLogic = ({ chatbotData, previewMode }: UseChatbotLogicPro
           true // forChatbotWidget
         );
         initialMessages = await ConversationService.getChatMessages(newSessionId, MESSAGES_PER_LOAD, 0, true);
-        console.log("Initialized anonymous session:", newSessionId);
         // Only clear history if it's a new anonymous session (e.g., after logout)
         if (!sessionId || sessionId !== newSessionId) { // Check if session ID actually changed
           shouldClearHistory = true;
@@ -315,7 +318,6 @@ export const useChatbotLogic = ({ chatbotData, previewMode }: UseChatbotLogicPro
             .map(pair => pair.prompt);
           setSuggestedPrompts(suggestivePrompts);
         } catch (error) {
-          console.log('No Q&A pairs found for auto-suggestions:', error);
           setSuggestedPrompts([]);
         }
       } else {
@@ -329,7 +331,9 @@ export const useChatbotLogic = ({ chatbotData, previewMode }: UseChatbotLogicPro
   // Fetch user profile on login or component mount if user is already logged in
   useEffect(() => {
     const fetchUserProfile = async () => {
-      if (authLoading) return; // Wait until authentication is resolved
+      if (authLoading) {
+        return; // Wait until authentication is resolved
+      }
 
       if (authUser) {
         const { data: profile, error } = await supabase
@@ -349,7 +353,6 @@ export const useChatbotLogic = ({ chatbotData, previewMode }: UseChatbotLogicPro
           setCurrentUser(profile as Profile);
           setIsLoggedIn(true);
         } else {
-          console.warn("Profile not found for authenticated user:", authUser.id);
           setCurrentUser(null);
           setIsLoggedIn(false);
         }
@@ -374,11 +377,17 @@ export const useChatbotLogic = ({ chatbotData, previewMode }: UseChatbotLogicPro
   // Handlers (from useChatbotHandlers)
   const handleBubbleClick = useCallback(() => {
     setIsExpanded(true);
-  }, []);
+    if (onResizeRequest) {
+      onResizeRequest("expanded");
+    }
+  }, [onResizeRequest]);
 
   const handleClose = useCallback(() => {
     setIsExpanded(false);
-  }, []);
+    if (onResizeRequest) {
+      onResizeRequest("collapsed");
+    }
+  }, [onResizeRequest]);
 
   const getSmartSuggestions = useCallback(async (input: string): Promise<string[]> => {
     if (!input.trim() || input.length < 2 || !internalChatbotData?.id || !isValidUUID(internalChatbotData.id)) {
@@ -447,10 +456,10 @@ export const useChatbotLogic = ({ chatbotData, previewMode }: UseChatbotLogicPro
           currentPersonaData = await AgentService.getUserPerformanceDataByLinkedIn(currentUser.linkedin_profile_url);
           setUserPersona(currentPersonaData); // Update state for future messages
           if (!currentPersonaData) {
-            console.warn("No data found in user_performance table for user with LinkedIn URL:", currentUser.linkedin_profile_url);
+            // No data found in user_performance table for user with LinkedIn URL
           }
         } catch (personaError) {
-          console.error("Error fetching persona data during message send:", personaError);
+          // Error fetching persona data during message send
         }
       } 
       // --- End Persona Data Fetching ---
@@ -459,18 +468,15 @@ export const useChatbotLogic = ({ chatbotData, previewMode }: UseChatbotLogicPro
       const containsInappropriateWord = INAPPROPRIATE_WORDS.some(word => lowerCaseMessage.includes(word));
 
       if (containsInappropriateWord) {
-        console.log("Inappropriate word detected.");
         botResponse = "I'm sorry, I cannot process messages containing inappropriate language.";
         isQnAMatch = true;
       } else if (!isPreviewMode) {
-        console.log("Checking for Q&A match for agent ID:", internalChatbotData.id, "and message:", userMessage);
         const matchingResponse = await PromptResponseService.findMatchingResponse(
           internalChatbotData.id,
           userMessage
         );
 
         if (matchingResponse) {
-          console.log("Matching Q&A response found:", matchingResponse);
           botResponse = matchingResponse;
           isQnAMatch = true;
         } else {
@@ -478,20 +484,16 @@ export const useChatbotLogic = ({ chatbotData, previewMode }: UseChatbotLogicPro
           const exactMatch = dynamicPrompts.find(p => p.prompt.toLowerCase() === lowerCaseMessage);
 
           if (exactMatch) {
-            console.log("Matching dynamic prompt found:", exactMatch);
             botResponse = exactMatch.response;
             isQnAMatch = true;
           } else if (internalChatbotData?.lead_collection_enabled && internalChatbotData?.lead_form_triggers?.length > 0) {
-            console.log("Lead form triggers:", internalChatbotData.lead_form_triggers);
-            console.log("User message (lowercase):", lowerCaseMessage);
             const leadTriggerMatch = internalChatbotData.lead_form_triggers.some((trigger: any) =>
               trigger.keywords.some((keyword: string) => lowerCaseMessage.includes(keyword.toLowerCase()))
             );
 
             if (leadTriggerMatch) {
-              console.log("Lead collection trigger keyword detected. Showing lead form.");
               // Check for LinkedIn specific trigger and user status
-              const linkedinKeywords = ["linkedin", "profile", "connect"]; // Define your LinkedIn trigger keywords
+              const linkedinKeywords = ["linkedin", "profile", "connect"];
               const isLinkedInTrigger = linkedinKeywords.some(keyword => lowerCaseMessage.includes(keyword));
 
               if (isLinkedInTrigger && currentUser) {
@@ -509,14 +511,13 @@ export const useChatbotLogic = ({ chatbotData, previewMode }: UseChatbotLogicPro
                 isQnAMatch = true; // Treat as a Q&A match to skip LLM
               }
             } else {
-              console.log("No matching Q&A response or lead trigger found.");
+              // No matching Q&A response or lead trigger found.
             }
           }
         }
       }
 
       if (!isQnAMatch) {
-        console.log("No Q&A match or lead trigger, calling OpenAI API.");
         const apiKey = internalChatbotData?.openai_api_key || import.meta.env.VITE_OPENAI_API_KEY;
 
         if (!apiKey) {
@@ -534,27 +535,25 @@ export const useChatbotLogic = ({ chatbotData, previewMode }: UseChatbotLogicPro
 
         // If persona data is available (either pre-loaded or just fetched), include it
         if (currentPersonaData) {
-          console.log("Persona data is available. Constructing persona-infused prompt.");
           const personaPrompt = `The user's persona is: ${JSON.stringify(currentPersonaData)}. Based on this, respond to their query: "${userMessage}"`;
           finalUserMessage = personaPrompt;
-          console.log("Sending persona-infused prompt to OpenAI:", finalUserMessage);
         } else {
-          console.log("Persona data is NOT available. Sending original message to OpenAI.");
+          // Persona data is NOT available. Sending original message to OpenAI.
         }
 
-        console.log("Full query sent to OpenAI:", finalUserMessage); // Added log
         const aiResponse = await openAIService.getChatCompletion(finalUserMessage, internalChatbotData?.agentPersona, threadId);
         botResponse = aiResponse.response;
         if (aiResponse.threadId) {
           setThreadId(aiResponse.threadId);
         }
       } else {
-        console.log("Q&A match or lead trigger found, skipping OpenAI API call.");
+        // Q&A match or lead trigger found, skipping OpenAI API call.
       }
 
       if (!isPreviewMode) {
-        console.log(`[useChatbotLogic] Adding user message to session: ${sessionId}`);
+        if (!isPreviewMode) {
         await ConversationService.addMessage(sessionId, userMessage, 'user');
+      }
       }
 
     } catch (error) {
@@ -571,13 +570,19 @@ export const useChatbotLogic = ({ chatbotData, previewMode }: UseChatbotLogicPro
       setChatHistory(prev => [...prev, botMessage]);
       
       if (!isPreviewMode) {
-        console.log(`[useChatbotLogic] Adding bot message to session: ${sessionId}`);
         await ConversationService.addMessage(sessionId, botResponse, 'bot');
       }
       
-      setMessageCount(prev => prev + 1);
+      setMessageCount(prev => {
+        const newCount = prev + 1;
+        // Check for backup trigger
+        if (internalChatbotData?.lead_backup_trigger?.enabled && newCount >= internalChatbotData.lead_backup_trigger.message_count && !leadFormSubmitted) {
+          setShowLeadForm(true);
+        }
+        return newCount;
+      });
     }
-  }, [message, isBotTyping, internalChatbotData, sessionId, threadId, currentUser, userPersona]);
+  }, [message, isBotTyping, internalChatbotData, sessionId, threadId, currentUser, userPersona, leadFormSubmitted]);
 
   const handleMessageChange = useCallback(async (e: React.ChangeEvent<HTMLTextAreaElement>) => {
     const value = e.target.value;
@@ -593,8 +598,34 @@ export const useChatbotLogic = ({ chatbotData, previewMode }: UseChatbotLogicPro
     }
   }, [getSmartSuggestions]);
 
-  const handleVoiceNote = useCallback(() => console.log("Voice note clicked"), []);
-  const handleAttachment = useCallback(() => console.log("Attachment clicked"), []);
+  const handleVoiceNote = useCallback(() => {
+    if (!browserSupportsSpeechRecognition) {
+      return;
+    }
+    if (listening) {
+      SpeechRecognition.stopListening();
+    } else {
+      resetTranscript();
+      try {
+        SpeechRecognition.startListening({ continuous: false }); // Changed to continuous: false
+      } catch (error) {
+        console.error("Error starting speech recognition:", error);
+      }
+    }
+  }, [listening, resetTranscript, browserSupportsSpeechRecognition]);
+
+  // Stop listening when chatbot is closed
+  useEffect(() => {
+    if (!isExpanded && listening) {
+      SpeechRecognition.stopListening();
+    }
+  }, [isExpanded, listening]);
+
+  useEffect(() => {
+    if (transcript) {
+      setMessage(transcript);
+    }
+  }, [transcript]);
 
   const handleCopyMessage = useCallback((messageText: string) => {
     navigator.clipboard.writeText(messageText);
@@ -614,10 +645,11 @@ export const useChatbotLogic = ({ chatbotData, previewMode }: UseChatbotLogicPro
   }, [sessionId]);
 
   const handleLoginClick = useCallback(() => {
-    if (!authLoading) {
+    // Only show modal if authentication is not loading and user is not logged in
+    if (!authLoading && !isLoggedIn) {
       setShowLoginModal(prev => !prev);
     }
-  }, [authLoading]);
+  }, [authLoading, isLoggedIn]);
 
   const handleLoginSuccess = useCallback(async (user: any) => {
     // Fetch the full profile data after successful login
@@ -685,7 +717,6 @@ export const useChatbotLogic = ({ chatbotData, previewMode }: UseChatbotLogicPro
   }, [linkedinUrlInput, currentUser, setCurrentUser]);
 
   const handleLeadFormSubmit = useCallback(async (formData: Record<string, any>) => {
-    console.log("Lead form submitted:", formData);
     try {
       if (!internalChatbotData?.id || !sessionId) {
         console.error("Agent ID or Session ID is missing, cannot submit lead.");
@@ -699,7 +730,6 @@ export const useChatbotLogic = ({ chatbotData, previewMode }: UseChatbotLogicPro
       if (currentUser && formData.linkedin_profile) {
         const normalizedUrl = normalizeLinkedInUrl(formData.linkedin_profile);
         if (normalizedUrl) {
-          console.log(`[useChatbotLogic] Updating user ${currentUser.user_id} profile with LinkedIn URL: ${normalizedUrl}`);
           await ConversationService.updateLinkedInProfile(currentUser.user_id, normalizedUrl);
           // Update local state to prevent re-prompting
           setCurrentUser(prev => prev ? { ...prev, linkedin_profile_url: normalizedUrl, persona_data: true } : null);
@@ -772,7 +802,6 @@ export const useChatbotLogic = ({ chatbotData, previewMode }: UseChatbotLogicPro
     handleSendMessage,
     handleMessageChange,
     handleVoiceNote,
-    handleAttachment,
     handleCopyMessage,
     handleFeedback,
     handleLoginClick,

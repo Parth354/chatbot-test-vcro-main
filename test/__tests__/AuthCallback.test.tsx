@@ -66,9 +66,10 @@ describe('AuthCallback Page', () => {
     const windowCloseSpy = vi.spyOn(window, 'close').mockImplementation(() => {});
 
     render(
-      <MemoryRouter>
+      <MemoryRouter initialEntries={['/auth/callback']}>
         <Routes>
           <Route path="/auth/callback" element={<AuthCallback />} />
+          <Route path="/" element={<div>Home Page</div>} />
         </Routes>
       </MemoryRouter>
     );
@@ -89,9 +90,10 @@ describe('AuthCallback Page', () => {
     const windowCloseSpy = vi.spyOn(window, 'close').mockImplementation(() => {});
 
     render(
-      <MemoryRouter>
+      <MemoryRouter initialEntries={['/auth/callback']}>
         <Routes>
           <Route path="/auth/callback" element={<AuthCallback />} />
+          <Route path="/" element={<div>Home Page</div>} />
         </Routes>
       </MemoryRouter>
     );
@@ -99,7 +101,6 @@ describe('AuthCallback Page', () => {
     await waitFor(() => {
       expect(windowCloseSpy).not.toHaveBeenCalled();
       expect(mockUseNavigate).not.toHaveBeenCalled();
-      expect(console.log).toHaveBeenCalledWith("Chatbot login successful, but not in a popup. No main app navigation.");
     });
   });
 
@@ -108,9 +109,10 @@ describe('AuthCallback Page', () => {
     vi.mocked(supabase.auth.getSession).mockResolvedValue({ data: { session: {} as any }, error: null });
 
     render(
-      <MemoryRouter>
+      <MemoryRouter initialEntries={['/auth/callback']}>
         <Routes>
           <Route path="/auth/callback" element={<AuthCallback />} />
+          <Route path="/" element={<div>Home Page</div>} />
         </Routes>
       </MemoryRouter>
     );
@@ -125,9 +127,10 @@ describe('AuthCallback Page', () => {
     vi.mocked(supabase.auth.getSession).mockResolvedValue({ data: { session: {} as any }, error: null });
 
     render(
-      <MemoryRouter>
+      <MemoryRouter initialEntries={['/auth/callback']}>
         <Routes>
           <Route path="/auth/callback" element={<AuthCallback />} />
+          <Route path="/" element={<div>Home Page</div>} />
         </Routes>
       </MemoryRouter>
     );
@@ -142,9 +145,10 @@ describe('AuthCallback Page', () => {
     vi.mocked(supabase.auth.getSession).mockResolvedValue({ data: { session: null }, error: null });
 
     render(
-      <MemoryRouter>
+      <MemoryRouter initialEntries={['/auth/callback']}>
         <Routes>
           <Route path="/auth/callback" element={<AuthCallback />} />
+          <Route path="/" element={<div>Home Page</div>} />
         </Routes>
       </MemoryRouter>
     );

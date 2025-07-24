@@ -9,10 +9,11 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { CalendarIcon, Search, Download, Eye, MessageSquare, Trash2 } from "lucide-react";
+import { CalendarIcon, Search, Download, Eye, MessageSquare, Trash2, Linkedin } from "lucide-react";
 import { format } from "date-fns";
 import { ConversationService } from "@/services/conversationService";
-import type { ChatSession, ChatMessage, ConversationFilters } from "@/types/agent";
+import { LeadService } from "@/services/leadService";
+import type { ChatSession, ChatMessage, ConversationFilters, LeadSubmission } from "@/types/agent";
 import { useToast } from "@/hooks/use-toast";
 
 interface ConversationHistoryTabProps {
@@ -24,6 +25,7 @@ export function ConversationHistoryTab({ agentId }: ConversationHistoryTabProps)
   const [loading, setLoading] = useState(true);
   const [selectedConversation, setSelectedConversation] = useState<ChatSession | null>(null);
   const [conversationMessages, setConversationMessages] = useState<ChatMessage[]>([]);
+  const [selectedLeadSubmission, setSelectedLeadSubmission] = useState<LeadSubmission | null>(null);
   const [isDetailDialogOpen, setIsDetailDialogOpen] = useState(false);
   const [filters, setFilters] = useState<ConversationFilters>({});
   const [dateFrom, setDateFrom] = useState<Date>();
@@ -93,6 +95,15 @@ export function ConversationHistoryTab({ agentId }: ConversationHistoryTabProps)
       setSelectedConversation(conversation);
       const messages = await ConversationService.getConversationDetails(conversation.id);
       setConversationMessages(messages);
+
+      // Fetch lead submission data if available
+      if (conversation.id) {
+        const leadSubmission = await LeadService.getLeadSubmissionBySessionId(conversation.id);
+        setSelectedLeadSubmission(leadSubmission);
+      } else {
+        setSelectedLeadSubmission(null);
+      }
+
       setIsDetailDialogOpen(true);
 
       // Update status to 'read' if it's currently 'unread'
@@ -157,14 +168,28 @@ export function ConversationHistoryTab({ agentId }: ConversationHistoryTabProps)
     });
   };
 
-  const handleDeleteConversation = async (sessionId: string) => {
-    if (confirm("Are you sure you want to delete this conversation? This action cannot be undone.")) {
+  const handleDeleteConversation = async (conversation: ChatSession) => {
+    const isAnonymous = conversation.user_id === null;
+    const confirmMessage = isAnonymous
+      ? "Are you sure you want to permanently delete this anonymous session and all its messages? This cannot be undone."
+      : "Are you sure you want to soft-delete this session? It will be hidden from this view but can be recovered by an admin.";
+
+    if (confirm(confirmMessage)) {
       try {
-        await ConversationService.hardDeleteChatSession(sessionId);
-        toast({
-          title: "Success",
-          description: "Conversation deleted successfully."
-        });
+        if (isAnonymous) {
+          await ConversationService.hardDeleteChatSession(conversation.id);
+          toast({
+            title: "Success",
+            description: "Anonymous session permanently deleted."
+          });
+        } else {
+          await ConversationService.softDeleteChatSession(conversation.id);
+          toast({
+            title: "Success",
+            description: "Conversation soft-deleted."
+          });
+        }
+        setIsDetailDialogOpen(false);
         loadConversations(); // Reload the list
       } catch (error) {
         toast({
@@ -461,7 +486,20 @@ export function ConversationHistoryTab({ agentId }: ConversationHistoryTabProps)
                 )}
                 {selectedConversation.linkedin_profile && (
                   <div>
-                    <strong>LinkedIn:</strong> {selectedConversation.linkedin_profile}
+                    <strong>LinkedIn:</strong> <a href={selectedConversation.linkedin_profile} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline flex items-center gap-1"><Linkedin className="w-4 h-4" /> {selectedConversation.linkedin_profile}</a>
+                  </div>
+                )}
+
+                {selectedLeadSubmission && selectedLeadSubmission.form_data && (
+                  <div className="col-span-2">
+                    <strong>Lead Form Data:</strong>
+                    <div className="bg-gray-100 p-2 rounded text-xs mt-1 space-y-1">
+                      {Object.entries(selectedLeadSubmission.form_data).map(([key, value]) => (
+                        <div key={key}>
+                          <strong className="capitalize">{key.replace(/_/g, ' ')}:</strong> {String(value)}
+                        </div>
+                      ))}
+                    </div>
                   </div>
                 )}
               </div>
@@ -494,7 +532,7 @@ export function ConversationHistoryTab({ agentId }: ConversationHistoryTabProps)
                   variant="destructive"
                   onClick={async () => {
                     if (selectedConversation) {
-                      await handleDeleteConversation(selectedConversation.id);
+                      await handleDeleteConversation(selectedConversation);
                       setIsDetailDialogOpen(false); // Close dialog after deletion
                     }
                   }}

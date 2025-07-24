@@ -20,7 +20,7 @@ import { validateAgentData } from "@/schemas/agentValidation"
 import { FieldError } from "@/components/ui/field-error"
 import { QnATab } from "@/components/QnATab"
 import { AiSettingsTab } from "@/components/agent-customize/AiSettingsTab";
-import { PersonalizationTab } from "@/components/agent-customize/PersonalizationTab";
+
 
 const AgentCustomize = () => {
   const { agentId } = useParams<{ agentId: string }>()
@@ -385,14 +385,13 @@ const AgentCustomize = () => {
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
           {/* Configuration Panel */} 
           <div className="space-y-6">
-            <Tabs value={currentTab} onValueChange={setCurrentTab} className="space-y-6">
-              <TabsList className="flex flex-wrap justify-start gap-2">
+            <Tabs value={currentTab} onValueChange={setCurrentTab} className="space-y-6 w-full">
+              <TabsList className="grid grid-cols-5">
                 <TabsTrigger value="basic">Basic</TabsTrigger>
                 <TabsTrigger value="prompts">Rotating Messages</TabsTrigger>
                 <TabsTrigger value="leadcollection">Lead Collection</TabsTrigger>
                 <TabsTrigger value="style">Style</TabsTrigger>
                 <TabsTrigger value="ai">AI Settings</TabsTrigger>
-                <TabsTrigger value="personalization">Personalization</TabsTrigger>
               </TabsList>
 
               <TabsContent value="basic" className="space-y-6">
@@ -599,7 +598,7 @@ const AgentCustomize = () => {
                                checked={formData.lead_form_fields?.some(f => f.system_field === 'linkedin_profile' && f.default_enabled)}
                                onCheckedChange={(checked) => {
                                  const linkedInField = {
-                                   id: 'linkedin_profile',
+                                   id: Date.now().toString(),
                                    type: 'text' as const,
                                    label: 'LinkedIn Profile',
                                    placeholder: 'LinkedIn Profile URL',
@@ -877,13 +876,6 @@ const AgentCustomize = () => {
                   handleInputChange={handleInputChange}
                 />
               </TabsContent>
-
-              <TabsContent value="personalization" className="space-y-6">
-                <PersonalizationTab
-                  formData={formData}
-                  handleInputChange={handleInputChange}
-                />
-              </TabsContent>
             </Tabs>
           </div>
 
@@ -908,7 +900,7 @@ const AgentCustomize = () => {
                   
                   <TabsContent value="bubble" className="space-y-4">
                     <div className="bg-gray-50 rounded-lg p-8 min-h-[200px] flex items-center justify-center">
-                      <ChatbotUI chatbotData={previewAgent} previewMode="collapsed" isLivePreview={false} />
+                      <ChatbotUI chatbotData={previewAgent} previewMode="collapsed" isLivePreview={false} loadingChatbotData={false} />
                     </div>
                     <p className="text-sm text-muted-foreground text-center">
                       This is how the chatbot appears when collapsed on your website

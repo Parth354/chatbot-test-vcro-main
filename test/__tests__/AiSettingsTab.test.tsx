@@ -92,7 +92,7 @@ describe('AiSettingsTab', () => {
       />
     );
 
-    await userEvent.click(screen.getByLabelText('AI Mode'));
+    await userEvent.click(screen.getByTestId('ai-mode-select'));
     await userEvent.click(screen.getByText('OpenAI Assistant'));
 
     expect(mockHandleInputChange).toHaveBeenCalledWith('ai_mode', 'assistant');
@@ -111,11 +111,10 @@ describe('AiSettingsTab', () => {
     expect(screen.queryByLabelText('AI Model')).not.toBeInTheDocument();
   });
 
-  it('should fetch models and assistants when API key is provided and button is clicked', async () => {
+  it('should fetch models when API key is provided and button is clicked', async () => {
     const mockApiKey = "test-api-key";
     const formDataWithKey = { ...defaultFormData, openai_api_key: mockApiKey };
     vi.mocked(OpenAIService.prototype.listModels).mockResolvedValueOnce([{ id: 'gpt-4', name: 'gpt-4' }]);
-    vi.mocked(OpenAIService.prototype.listAssistants).mockResolvedValueOnce([{ id: 'asst_123', name: 'My Assistant' }]);
 
     render(
       <AiSettingsTab
@@ -128,12 +127,34 @@ describe('AiSettingsTab', () => {
 
     await waitFor(() => {
       expect(OpenAIService).toHaveBeenCalledWith({ apiKey: mockApiKey, aiMode: 'chat_completion' });
-      expect(OpenAIService).toHaveBeenCalledWith({ apiKey: mockApiKey, aiMode: 'assistant', listOnly: true });
       expect(OpenAIService.prototype.listModels).toHaveBeenCalled();
-      expect(OpenAIService.prototype.listAssistants).toHaveBeenCalled();
-      expect(screen.getByText('gpt-4')).toBeInTheDocument();
-      expect(screen.getByText('My Assistant')).toBeInTheDocument();
     });
+
+    await userEvent.click(screen.getByLabelText('AI Model'));
+    expect(await screen.findByText('gpt-4')).toBeInTheDocument();
+  });
+
+  it('should fetch assistants when API key is provided and button is clicked', async () => {
+    const mockApiKey = "test-api-key";
+    const formDataWithKey = { ...defaultFormData, openai_api_key: mockApiKey, ai_mode: 'assistant' as const };
+    vi.mocked(OpenAIService.prototype.listAssistants).mockResolvedValueOnce([{ id: 'asst_123', name: 'My Assistant' }]);
+
+    render(
+      <AiSettingsTab
+        formData={formDataWithKey}
+        handleInputChange={mockHandleInputChange}
+      />
+    );
+
+    await userEvent.click(screen.getByRole('button', { name: /Fetch Resources/i }));
+
+    await waitFor(() => {
+      expect(OpenAIService).toHaveBeenCalledWith({ apiKey: mockApiKey, aiMode: 'assistant', listOnly: true });
+      expect(OpenAIService.prototype.listAssistants).toHaveBeenCalled();
+    });
+
+    await userEvent.click(screen.getByLabelText('OpenAI Assistant'));
+    expect(await screen.findByText('My Assistant')).toBeInTheDocument();
   });
 
   it('should show toast error if API key is missing when fetching resources', async () => {
@@ -208,6 +229,7 @@ describe('AiSettingsTab', () => {
     );
 
     await userEvent.click(screen.getByRole('button', { name: /Fetch Resources/i }));
+    await userEvent.click(screen.getByLabelText('AI Model'));
     await waitFor(() => {
       expect(screen.getByText('gpt-4')).toBeInTheDocument();
     });
@@ -231,6 +253,7 @@ describe('AiSettingsTab', () => {
     );
 
     await userEvent.click(screen.getByRole('button', { name: /Fetch Resources/i }));
+    await userEvent.click(screen.getByLabelText('OpenAI Assistant'));
     await waitFor(() => {
       expect(screen.getByText('My Assistant')).toBeInTheDocument();
     });

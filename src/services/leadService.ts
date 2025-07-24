@@ -43,4 +43,18 @@ export class LeadService {
 
     return data as LeadSubmission | null;
   }
+
+  static async getLeadSubmissionBySessionId(sessionId: string): Promise<LeadSubmission | null> {
+    const { data, error } = await supabase
+      .from('lead_submissions')
+      .select('*')
+      .eq('session_id', sessionId)
+      .maybeSingle();
+
+    if (error) {
+      throw new Error(`Failed to fetch lead submission by session ID: ${error.message}`);
+    }
+
+    return data as LeadSubmission | null;
+  }
 }

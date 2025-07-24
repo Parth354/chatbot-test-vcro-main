@@ -59,6 +59,10 @@ export class AgentService {
       throw new Error(`Failed to fetch agent: ${error.message}`)
     }
 
+    if (!data) {
+      return null;
+    }
+
     return this.parseAgentData(data)
   }
 
@@ -228,12 +232,13 @@ export class AgentService {
     yesterday.setDate(yesterday.getDate() - 1);
     yesterday.setHours(0, 0, 0, 0);
 
-    const { count: yesterdayMessagesCount, error: yesterdayError } = await supabase
+    const query = supabase
       .from('chat_messages')
       .select('id', { count: 'exact' })
       .in('session_id', sessionIds)
-      .gte('created_at', yesterday.toISOString())
-      .lt('created_at', today.toISOString());
+      .gte('created_at', yesterday.toISOString());
+
+    const { count: yesterdayMessagesCount, error: yesterdayError } = await query.lt('created_at', today.toISOString());
 
     if (yesterdayError) {
       throw new Error(`Failed to fetch yesterday's messages: ${yesterdayError.message}`);
@@ -302,7 +307,7 @@ export class AgentService {
       .eq('status', 'unread'); // Assuming a 'status' column in lead_submissions
 
     if (leadsError) {
-      console.warn('Could not fetch leads requiring attention (status column might be missing):', leadsError.message);
+      // Could not fetch leads requiring attention (status column might be missing)
       leadsRequiringAttention = 0; // Set to 0 if column is missing or error occurs
     }
 
@@ -314,7 +319,7 @@ export class AgentService {
 
     let respondedSessionsCount = 0;
     if (respondedSessionsError) {
-      console.warn('Could not fetch responded sessions data:', respondedSessionsError.message);
+      // Could not fetch responded sessions data
     } else {
       respondedSessionsCount = respondedSessionsData?.length || 0;
     }
@@ -345,14 +350,13 @@ export class AgentService {
 
     if (error) {
       if (error.code === 'PGRST116') {
-        console.log("No persona data found for user:", userId); // Log if no data
+        // No persona data found for user
         return null; // No persona data found
       }
       console.error("Error fetching user performance data:", error);
       throw new Error(`Failed to fetch user performance data: ${error.message}`);
     }
 
-    console.log("Fetched persona data from user_performance:", data?.enriched_data); // Log the fetched data
     return data?.enriched_data || null;
   }
 
@@ -362,14 +366,13 @@ export class AgentService {
       .from('profiles')
       .select('user_id')
       .eq('linkedin_profile_url', linkedinUrl)
-      .single();
+      .maybeSingle();
 
     if (profileError) {
       if (profileError.code === 'PGRST116') {
-        console.log(`No profile found with LinkedIn URL: ${linkedinUrl}`);
+        // No profile found with LinkedIn URL
         return null;
       }
-      console.error("Error fetching profile by LinkedIn URL:", profileError);
       throw new Error(`Failed to fetch profile by LinkedIn URL: ${profileError.message}`);
     }
 

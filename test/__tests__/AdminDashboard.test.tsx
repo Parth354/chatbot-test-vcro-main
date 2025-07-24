@@ -62,9 +62,13 @@ describe('AdminDashboard', () => {
     vi.mocked(useAuth).mockReturnValue({
       user: mockAdminUser,
       profile: mockAdminProfile,
+      session: {} as any, // Mock a session object
       loading: false,
       signOut: mockSignOut,
+      signInWithGoogle: vi.fn(),
       signInWithGoogleForAdmin: mockSignInWithGoogleForAdmin,
+      signInWithPasswordForAdmin: vi.fn(),
+      signUp: vi.fn(),
     });
 
     // Default mock for AgentService
@@ -108,9 +112,13 @@ describe('AdminDashboard', () => {
     vi.mocked(useAuth).mockReturnValue({
       user: null,
       profile: null,
+      session: null, // Added missing property
       loading: true,
       signOut: mockSignOut,
+      signInWithGoogle: vi.fn(), // Added missing property
       signInWithGoogleForAdmin: mockSignInWithGoogleForAdmin,
+      signInWithPasswordForAdmin: vi.fn(), // Added missing property
+      signUp: vi.fn(), // Added missing property
     });
     renderAdminDashboard();
     expect(screen.getByText('Loading...')).toBeInTheDocument();

@@ -14,7 +14,7 @@ import { useAuth } from "@/hooks/useAuth"
 
 const Auth = () => {
   const { toast } = useToast()
-  const { signInWithGoogleForAdmin, signInWithPasswordForAdmin } = useAuth();
+  const { signInWithGoogleForAdmin, signInWithPasswordForAdmin, signUp } = useAuth()
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<{
     email?: string;
@@ -37,17 +37,19 @@ const Auth = () => {
   })
 
   const handleSignIn = async (e: React.FormEvent) => {
-    e.preventDefault()
+    e.preventDefault();
     setLoading(true);
-    setError({});
+    const newErrors: { [key: string]: string } = {};
 
     if (!signInData.email) {
-      setError(prev => ({ ...prev, email: "Email is required" }));
-      setLoading(false);
-      return;
+      newErrors.email = "Email is required";
     }
     if (!signInData.password) {
-      setError(prev => ({ ...prev, password: "Password is required" }));
+      newErrors.password = "Password is required";
+    }
+
+    if (Object.keys(newErrors).length > 0) {
+      setError(newErrors);
       setLoading(false);
       return;
     }
@@ -115,7 +117,7 @@ const Auth = () => {
     try {
       const redirectUrl = `${window.location.origin}/`;
       
-      const { data, error: authError } = await supabase.auth.signUp({
+      const { data, error: authError } = await signUp({
         email: signUpData.email,
         password: signUpData.password,
         options: {
@@ -303,4 +305,3 @@ const Auth = () => {
 }
 
 export default Auth
-

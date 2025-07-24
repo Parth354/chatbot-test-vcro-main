@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { validateAgentDataForTests as validateAgentData } from '@/schemas/agentValidation'
+import { validateAgentData } from '@/schemas/agentValidation'
 
 const mockValidAgentData = {
   name: 'Test Agent',

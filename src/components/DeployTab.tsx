@@ -13,16 +13,16 @@ interface DeployTabProps {
 
 const DeployTab = ({ agentId }: DeployTabProps) => {
   const { toast } = useToast()
-  const [iframeWidth, setIframeWidth] = useState("400")
-  const [iframeHeight, setIframeHeight] = useState("600")
+  const [iframeWidth, setIframeWidth] = useState<string>("400")
+  const [iframeHeight, setIframeHeight] = useState<string>("600")
   
   // Get chatbot base URL from environment variable or use current domain
   const chatbotBaseUrl = import.meta.env.VITE_APP_URL || window.location.origin;
   
   // URLs and code snippets
   const directLink = `${chatbotBaseUrl}/embed/${agentId}`
-  const scriptCode = `<script defer src="${chatbotBaseUrl}/embed.js" data-bot-id="${agentId}" data-app-url="${chatbotBaseUrl}"></script>`
-  const iframeCode = `<iframe style="width: ${iframeWidth}px; height: ${iframeHeight}px;" src="${chatbotBaseUrl}/iframe/${agentId}"></iframe>`
+  const scriptCode = `<script defer src="${chatbotBaseUrl}/embed.js" data-bot-id="${agentId}"></script>`
+  const iframeCode = `<iframe style="width: ${iframeWidth}px; height: ${iframeHeight}px; border: none;" src="${chatbotBaseUrl}/iframe/${agentId}"></iframe>`
 
   const copyToClipboard = async (text: string, label: string) => {
     try {
@@ -164,10 +164,10 @@ const DeployTab = ({ agentId }: DeployTabProps) => {
           <div className="mt-4 p-4 bg-muted rounded-lg">
             <h4 className="font-medium mb-2">Usage Notes:</h4>
             <ul className="text-sm text-muted-foreground space-y-1 list-disc list-inside">
-              <li>Adjust width and height to fit your layout</li>
-              <li>The chatbot will be displayed in an expanded state</li>
-              <li>Recommended minimum size: 400x600 pixels</li>
-              <li>The iframe is responsive and will adapt to smaller screens</li>
+              <li>The iframe will take 100% width and height of its parent container.</li>
+              <li>Ensure the parent container has a defined width and height (e.g., using CSS).</li>
+              <li>The chatbot will be displayed in an expanded state within the iframe.</li>
+              <li>Recommended minimum size for the parent container: 400px width and 600px height.</li>
             </ul>
           </div>
         </CardContent>

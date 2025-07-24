@@ -1,5 +1,5 @@
 import { createContext, useContext, useEffect, useState, useMemo } from 'react'
-import { User, Session, SignInWithPasswordCredentials } from '@supabase/supabase-js'
+import { User, Session, SignInWithPasswordCredentials, SignUpWithPasswordCredentials } from '@supabase/supabase-js'
 import { supabase } from '@/integrations/supabase/client'
 import { Profile } from '@/types/profile'
 
@@ -12,6 +12,7 @@ interface AuthContextType {
   signInWithGoogle: () => Promise<void>;
   signInWithGoogleForAdmin: () => Promise<void>;
   signInWithPasswordForAdmin: (credentials: SignInWithPasswordCredentials) => Promise<void>;
+  signUp: (credentials: SignUpWithPasswordCredentials) => Promise<any>;
 }
 
 const AuthContext = createContext<AuthContextType>({
@@ -23,6 +24,7 @@ const AuthContext = createContext<AuthContextType>({
   signInWithGoogle: async () => {},
   signInWithGoogleForAdmin: async () => {},
   signInWithPasswordForAdmin: async () => {},
+  signUp: async () => {},
 });
 
 export const useAuth = () => {
@@ -50,7 +52,6 @@ export const AuthProvider = ({ children, navigate }: { children: React.ReactNode
       .maybeSingle();
 
     if (error && error.code !== 'PGRST116') {
-      console.error("[Auth] fetchUserProfile: Error fetching profile:", error);
       return null;
     }
 
@@ -87,7 +88,7 @@ export const AuthProvider = ({ children, navigate }: { children: React.ReactNode
         .single();
 
       if (createError) {
-        console.error("[Auth] fetchUserProfile: Error creating profile:", createError);
+        // Error creating profile
         return null;
       }
       profileData = newProfile;
@@ -118,20 +119,14 @@ export const AuthProvider = ({ children, navigate }: { children: React.ReactNode
   useEffect(() => {
     const handleSession = async (newSession: Session | null) => {
       if (newSession) {
-        // Only update if session or user has genuinely changed
-        if (newSession.user.id !== user?.id || newSession.access_token !== session?.access_token) {
-          const userProfile = await fetchUserProfile(newSession);
-          setSession(newSession);
-          setUser(newSession.user);
-          setProfile(userProfile);
-        }
+        const userProfile = await fetchUserProfile(newSession);
+        setSession(newSession);
+        setUser(newSession.user);
+        setProfile(userProfile || null);
       } else {
-        // Only clear if there was a session before
-        if (session) {
-          setSession(null);
-          setUser(null);
-          setProfile(null);
-        }
+        setSession(null);
+        setUser(null);
+        setProfile(null);
       }
 
       setLoading(false);
@@ -156,6 +151,12 @@ export const AuthProvider = ({ children, navigate }: { children: React.ReactNode
       subscription.unsubscribe();
     };
   }, []);
+
+  useEffect(() => {
+    if (session?.user && (session.user.id !== user?.id || session.access_token !== session?.access_token)) {
+      fetchUserProfile(session).then(setProfile);
+    }
+  }, [session?.user?.id, session?.access_token]);
 
   useEffect(() => {
     if (!loading && profile) {
@@ -193,7 +194,7 @@ export const AuthProvider = ({ children, navigate }: { children: React.ReactNode
       },
     });
     if (error) {
-      console.error('[Auth] signInWithGoogle: Error:', error);
+      // Error during signInWithGoogle
       throw error;
     }
   };
@@ -208,7 +209,7 @@ export const AuthProvider = ({ children, navigate }: { children: React.ReactNode
       },
     });
     if (error) {
-      console.error('[Auth] signInWithGoogleForAdmin: Error:', error);
+      // Error during signInWithGoogleForAdmin
       sessionStorage.removeItem('adminLoginIntent');
       throw error;
     }
@@ -218,10 +219,19 @@ export const AuthProvider = ({ children, navigate }: { children: React.ReactNode
     sessionStorage.setItem('adminLoginIntent', 'true');
     const { error } = await supabase.auth.signInWithPassword(credentials);
     if (error) {
-      console.error('[Auth] signInWithPasswordForAdmin: Error:', error);
+      // Error during signInWithPasswordForAdmin
       sessionStorage.removeItem('adminLoginIntent');
       throw error;
     }
+  };
+
+  const signUp = async (credentials: SignUpWithPasswordCredentials) => {
+    const { data, error } = await supabase.auth.signUp(credentials);
+    if (error) {
+      // Error during signUp
+      throw error;
+    }
+    return { data, error };
   };
 
   const value = useMemo(() => ({
@@ -233,6 +243,7 @@ export const AuthProvider = ({ children, navigate }: { children: React.ReactNode
     signInWithGoogle,
     signInWithGoogleForAdmin,
     signInWithPasswordForAdmin,
+    signUp,
   }), [user, profile, session, loading]);
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

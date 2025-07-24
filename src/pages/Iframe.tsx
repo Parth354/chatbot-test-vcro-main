@@ -1,26 +1,29 @@
 import { useEffect, useState } from "react"
-import { useParams } from "react-router-dom"
+import { useParams, useLocation } from "react-router-dom"
 import ChatbotUI from "@/components/ChatbotUI";
 import { AgentService } from "@/services/agentService"
 import type { Agent } from "@/types/agent"
 
 const Iframe = () => {
   const { agentId } = useParams<{ agentId: string }>()
+  const location = useLocation()
+  const urlParams = new URLSearchParams(location.search)
   const [agent, setAgent] = useState<Agent | null>(null)
   const [loading, setLoading] = useState(true)
-  const [alignment, setAlignment] = useState<string>("center")
   const [error, setError] = useState<string | null>(null)
-  const [previewMode, setPreviewMode] = useState<"collapsed" | "expanded" | undefined>(undefined)
-  const [isLivePreview, setIsLivePreview] = useState<boolean>(false)
+  const [initialState, setInitialState] = useState<"collapsed" | "expanded">((urlParams.get("initialState") as "collapsed" | "expanded") || "collapsed")
+  const [align, setAlign] = useState<string>((urlParams.get("align") as string) || "bottom-right")
+
+  const handleResizeRequest = (state: "collapsed" | "expanded") => {
+    window.parent.postMessage({ type: 'chatbot-resize', state }, '*');
+  };
 
   useEffect(() => {
-    const urlParams = new URLSearchParams(window.location.search)
-    const align = urlParams.get("align") || "center"
-    const mode = urlParams.get("mode") as "collapsed" | "expanded" | undefined
+    const urlParams = new URLSearchParams(location.search)
+    const mode = urlParams.get("initialState") as "collapsed" | "expanded"
+    setInitialState(mode || "collapsed")
 
-    setAlignment(align)
-    setPreviewMode(mode)
-    setIsLivePreview(mode === "expanded") // Set isLivePreview based on mode
+    const align = urlParams.get("align") || "bottom-right"
     
     if (!agentId) {
       setError("Agent ID is missing.");
@@ -28,7 +31,7 @@ const Iframe = () => {
       return;
     }
     loadAgent()
-  }, [agentId, window.location.search])
+  }, [agentId, location.search])
 
   const loadAgent = async () => {
     if (!agentId) return
@@ -50,25 +53,10 @@ const Iframe = () => {
     }
   }
 
-  const getAlignmentClasses = () => {
-    switch (alignment) {
-      case "left":
-        return "justify-start items-center"
-      case "right":
-        return "justify-end items-center"
-      case "top":
-        return "justify-center items-start"
-      case "bottom":
-        return "justify-center items-end"
-      default:
-        return "justify-center items-center"
-    }
-  }
-
   if (loading) {
     return (
       <div className="w-full h-full min-h-screen bg-transparent flex items-center justify-center">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+        <div role="status" className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
       </div>
     )
   }
@@ -76,7 +64,7 @@ const Iframe = () => {
   if (error) {
     return (
       <div className="w-full h-full min-h-screen bg-transparent flex items-center justify-center">
-        <p className="text-red-500">Error: {error}</p>
+        <p className="text-red-500">Error: {String(error)}</p>
       </div>
     )
   }
@@ -90,8 +78,15 @@ const Iframe = () => {
   }
 
   return (
-    <div className={`w-full h-full min-h-screen bg-transparent flex p-4 ${getAlignmentClasses()}`}>
-      <ChatbotUI chatbotData={agent} previewMode={previewMode} isLivePreview={isLivePreview} loadingChatbotData={loading} />
+    <div role="main" className="w-full h-full min-h-screen bg-transparent flex">
+      <ChatbotUI 
+        chatbotData={agent} 
+        previewMode={initialState} 
+        isLivePreview={initialState === "expanded"} 
+        loadingChatbotData={loading} 
+        onResizeRequest={handleResizeRequest} 
+        align={urlParams.get("align") || "bottom-right"}
+      />
     </div>
   )
 }

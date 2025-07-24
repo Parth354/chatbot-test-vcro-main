@@ -67,13 +67,14 @@ export default function LeadCollectionForm({ fields, submitText, onSubmit, onCan
       <form onSubmit={handleSubmit} className="space-y-4">
         {sortedFields.map((field) => (
           <div key={field.id} className="space-y-2">
-            <label className="text-sm font-medium text-gray-700">
+            <label htmlFor={field.id} className="text-sm font-medium text-gray-700">
               {field.label}
               {field.required && <span className="text-red-500 ml-1">*</span>}
             </label>
             
             {field.type === 'text' && (
               <Input
+                id={field.id}
                 type="text"
                 placeholder={field.placeholder}
                 value={formData[field.id] || ''}
@@ -84,6 +85,7 @@ export default function LeadCollectionForm({ fields, submitText, onSubmit, onCan
             
             {field.type === 'email' && (
               <Input
+                id={field.id}
                 type="email"
                 placeholder={field.placeholder}
                 value={formData[field.id] || ''}
@@ -94,6 +96,7 @@ export default function LeadCollectionForm({ fields, submitText, onSubmit, onCan
             
             {field.type === 'phone' && (
               <Input
+                id={field.id}
                 type="tel"
                 placeholder={field.placeholder}
                 value={formData[field.id] || ''}
@@ -104,6 +107,7 @@ export default function LeadCollectionForm({ fields, submitText, onSubmit, onCan
             
             {field.type === 'textarea' && (
               <Textarea
+                id={field.id}
                 placeholder={field.placeholder}
                 value={formData[field.id] || ''}
                 onChange={(e) => handleInputChange(field.id, e.target.value)}
@@ -117,7 +121,7 @@ export default function LeadCollectionForm({ fields, submitText, onSubmit, onCan
                 value={formData[field.id] || ''}
                 onValueChange={(value) => handleInputChange(field.id, value)}
               >
-                <SelectTrigger className={errors[field.id] ? 'border-red-500' : ''}>
+                <SelectTrigger id={field.id} className={errors[field.id] ? 'border-red-500' : ''}>
                   <SelectValue placeholder={field.placeholder || 'Select an option'} />
                 </SelectTrigger>
                 <SelectContent>

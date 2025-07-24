@@ -1,4 +1,4 @@
-import { render, screen, waitFor, fireEvent } from '@testing-library/react';
+import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { expect, vi } from 'vitest';
 
@@ -25,10 +25,18 @@ vi.mock('@/hooks/use-toast', () => ({
   })),
 }));
 
+const mockNavigate = vi.fn();
+vi.mock('react-router-dom', async (importOriginal) => {
+  const actual = await importOriginal();
+  return {
+    ...actual,
+    useParams: () => ({ agentId: 'agent-123' }),
+    useNavigate: () => mockNavigate,
+  };
+});
+
 describe('AgentConversationHistory', () => {
-  const mockNavigate = vi.fn();
   const mockToast = vi.fn();
-  const agentId = 'agent-123';
 
   const mockSessions = [
     { id: 's1', user_name: 'John Doe', user_email: 'john@example.com', status: 'unread', created_at: new Date().toISOString(), last_message_at: new Date().toISOString(), message_count: 5, user_id: 'user-1' },
@@ -49,21 +57,11 @@ describe('AgentConversationHistory', () => {
     vi.mocked(ConversationService.updateChatSessionStatus).mockResolvedValue(undefined);
     vi.mocked(ConversationService.hardDeleteChatSession).mockResolvedValue(undefined);
     vi.mocked(ConversationService.softDeleteChatSession).mockResolvedValue(undefined);
-
-    vi.mock('react-router-dom', async (importOriginal) => {
-      const actual = await importOriginal();
-      return {
-        ...actual,
-        useParams: () => ({ agentId }),
-        useNavigate: () => mockNavigate,
-      };
-    });
-
     vi.spyOn(window, 'confirm').mockReturnValue(true);
   });
 
   const renderComponent = () => {
-    render(<AgentConversationHistory agentId={agentId} />);
+    render(<AgentConversationHistory />);
   };
 
   it('should render loading state initially', () => {
@@ -169,24 +167,19 @@ describe('AgentConversationHistory', () => {
   });
 
   it('should delete all sessions (mix of hard and soft)', async () => {
-    vi.mocked(ConversationService.getChatSessions).mockResolvedValueOnce(mockSessions).mockResolvedValueOnce([]);
-
     renderComponent();
     await waitFor(() => {
       expect(screen.getByText('John Doe')).toBeInTheDocument();
     });
-
+  
     await userEvent.click(screen.getByRole('button', { name: /Delete All/i }));
-
-    expect(window.confirm).toHaveBeenCalledWith('Are you sure you want to delete ALL conversations for this agent? Anonymous sessions will be permanently deleted, and authenticated sessions will be soft-deleted.');
-    expect(ConversationService.hardDeleteChatSession).toHaveBeenCalledWith('s3'); // Anonymous
-    expect(ConversationService.softDeleteChatSession).toHaveBeenCalledWith('s1'); // Authenticated
-    expect(ConversationService.softDeleteChatSession).toHaveBeenCalledWith('s2'); // Authenticated
-    expect(mockToast).toHaveBeenCalledWith(expect.objectContaining({ title: 'Deletion Process Complete' }));
+  
     await waitFor(() => {
-      expect(screen.queryByText('John Doe')).not.toBeInTheDocument();
-      expect(screen.queryByText('Jane Smith')).not.toBeInTheDocument();
-      expect(screen.queryByText('Anonymous')).not.toBeInTheDocument();
+      expect(window.confirm).toHaveBeenCalledWith('Are you sure you want to delete ALL sessions for this agent? Anonymous sessions will be permanently deleted, and authenticated sessions will be soft-deleted.');
+      expect(ConversationService.hardDeleteChatSession).toHaveBeenCalledWith('s3'); // Anonymous
+      expect(ConversationService.softDeleteChatSession).toHaveBeenCalledWith('s1'); // Authenticated
+      expect(ConversationService.softDeleteChatSession).toHaveBeenCalledWith('s2'); // Authenticated
+      expect(mockToast).toHaveBeenCalledWith(expect.objectContaining({ title: 'Deletion Process Complete' }));
     });
   });
 
@@ -224,7 +217,10 @@ describe('AgentConversationHistory', () => {
 
   it('should navigate back when back button is clicked', async () => {
     renderComponent();
-    await userEvent.click(screen.getByRole('button', { name: /ArrowLeft/i })); // Using accessible name for Lucide icon
+    await waitFor(() => {
+      expect(screen.getByTestId('back-button')).toBeInTheDocument();
+    });
+    await userEvent.click(screen.getByTestId('back-button'));
     expect(mockNavigate).toHaveBeenCalledWith(-1);
   });
 });

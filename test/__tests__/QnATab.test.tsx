@@ -15,13 +15,20 @@ vi.mock('@/services/promptResponseService', () => ({
   },
 }));
 
-
+// Mock useToast
+const mockToast = vi.fn();
+vi.mock('@/hooks/use-toast', () => ({
+  useToast: () => ({
+    toast: mockToast,
+  }),
+}));
 
 describe('QnATab', () => {
   const agentId = 'agent-123';
 
   beforeEach(() => {
     vi.clearAllMocks();
+    mockToast.mockClear();
     // Default mock for getPromptResponses to return empty array
     vi.mocked(PromptResponseService.getPromptResponses).mockResolvedValue([]);
   });
@@ -209,8 +216,8 @@ describe('QnATab', () => {
     await userEvent.click(within(dialog).getByRole('button', { name: /Create Q&A Pair/i }));
 
     await waitFor(() => {
-      expect(vi.mocked(useToast)().toast).toHaveBeenCalledWith(expect.objectContaining({
-        title: 'Validation Error',
+      expect(mockToast).toHaveBeenCalledWith(expect.objectContaining({
+        title: 'Error',
         description: 'Both prompt and response are required',
         variant: 'destructive',
       }));
